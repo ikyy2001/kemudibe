@@ -25,9 +25,7 @@ class ClassRoomRequest extends FormRequest
 
         return [
             'name' => 'required|string|max:255|unique:class_rooms,name,' . $id,
-            'photo' => $this->isMethod('post')
-                        ? 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
-                        : 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'grade' => 'required|integer|min:1|max:12',
         ];
     }

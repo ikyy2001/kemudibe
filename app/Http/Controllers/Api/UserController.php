@@ -108,8 +108,21 @@ class UserController extends Controller
             $accountRows = [];
             $defaultPassword = $request->string('default_password', 'password123');
 
-            // 1. If file is uploaded, parse with PhpSpreadsheet
-            if ($request->hasFile('file')) {
+            // 1. Cek jika 'users' dikirimkan (bisa berupa JSON array atau JSON string dalam form-data)
+            if ($request->has('users')) {
+                $rawUsers = $request->input('users');
+                if (is_string($rawUsers)) {
+                    $decoded = json_decode($rawUsers, true);
+                    if (is_array($decoded) && !empty($decoded)) {
+                        $accountRows = $decoded;
+                    }
+                } elseif (is_array($rawUsers) && !empty($rawUsers)) {
+                    $accountRows = $rawUsers;
+                }
+            }
+
+            // 2. Jika 'users' belum ada dan ada upload file, parse file Excel/CSV via PhpSpreadsheet
+            if (empty($accountRows) && $request->hasFile('file')) {
                 $file = $request->file('file');
                 $extension = strtolower($file->getClientOriginalExtension());
 
@@ -121,13 +134,10 @@ class UserController extends Controller
                 }
 
                 $accountRows = $this->userService->parseSpreadsheet($file);
-            } elseif ($request->isJson() || $request->has('users')) {
-                // 2. If client pre-parsed or sends JSON rows
-                $accountRows = $request->input('users', []);
-            } else {
+            } elseif (empty($accountRows)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Silakan upload file Excel (.xlsx) atau kirim daftar akun.',
+                    'message' => 'Silakan upload file Excel (.xlsx) atau kirim daftar akun yang valid.',
                 ], 422);
             }
 

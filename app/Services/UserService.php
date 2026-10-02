@@ -84,22 +84,27 @@ class UserService
         foreach ($headerRow as $col => $val) {
             if (!$val) continue;
             $clean = strtolower(trim((string)$val));
-            if (str_contains($clean, 'nama') || str_contains($clean, 'name')) {
-                $headerMap['name'] = $col;
-            } elseif (str_contains($clean, 'email') || str_contains($clean, 'surel')) {
+
+            // Kolom kelas/rombel dideteksi lebih dulu agar 'Nama/ID Kelas' tidak menimpa 'Nama Lengkap'
+            if (str_contains($clean, 'kelas') || str_contains($clean, 'class') || str_contains($clean, 'rombel')) {
+                $headerMap['classroom'] = $col;
+            } elseif (str_contains($clean, 'email') || str_contains($clean, 'surel') || str_contains($clean, 'mail')) {
                 $headerMap['email'] = $col;
             } elseif (str_contains($clean, 'pass') || str_contains($clean, 'sandi')) {
                 $headerMap['password'] = $col;
-            } elseif (str_contains($clean, 'gender') || str_contains($clean, 'kelamin') || $clean === 'jk') {
+            } elseif (str_contains($clean, 'gender') || str_contains($clean, 'kelamin') || $clean === 'jk' || str_contains($clean, 'sex')) {
                 $headerMap['gender'] = $col;
-            } elseif (str_contains($clean, 'role') || str_contains($clean, 'peran')) {
+            } elseif (str_contains($clean, 'role') || str_contains($clean, 'peran') || str_contains($clean, 'jabatan')) {
                 $headerMap['role'] = $col;
-            } elseif (str_contains($clean, 'kelas') || str_contains($clean, 'class')) {
-                $headerMap['classroom'] = $col;
+            } elseif (str_contains($clean, 'nama') || str_contains($clean, 'name')) {
+                // Kolom nama siswa/guru: prioritaskan 'nama lengkap' atau kolom pertama yang belum terisi
+                if (!isset($headerMap['name']) || str_contains($clean, 'lengkap') || str_contains($clean, 'full')) {
+                    $headerMap['name'] = $col;
+                }
             }
         }
 
-        // Default fallbacks if headers weren't named standardly
+        // Default positional fallbacks if headers weren't named standardly
         if (!isset($headerMap['name'])) $headerMap['name'] = 'A';
         if (!isset($headerMap['email'])) $headerMap['email'] = 'B';
         if (!isset($headerMap['password'])) $headerMap['password'] = 'C';

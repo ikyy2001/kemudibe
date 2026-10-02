@@ -44,7 +44,7 @@ class ProfileController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $user->id,
                 'gender' => 'nullable|in:male,female',
-                'photo' => 'nullable|string',
+                'photo' => 'nullable',
             ]);
 
             if ($validator->fails()) {
@@ -55,7 +55,17 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            $user->update($request->only(['name', 'email', 'gender', 'photo']));
+            $data = $request->only(['name', 'email', 'gender']);
+
+            if ($request->hasFile('photo')) {
+                $file = $request->file('photo');
+                $path = $file->store('profiles', 'public');
+                $data['photo'] = $path;
+            } elseif ($request->filled('photo')) {
+                $data['photo'] = $request->input('photo');
+            }
+
+            $user->update($data);
 
             return response()->json([
                 'success' => true,

@@ -22,7 +22,11 @@ class ClassRoom extends Model
             return null;
         }
 
-        return url(Storage::url($value));
+        if (filter_var($value, FILTER_VALIDATE_URL) || str_starts_with($value, 'http://') || str_starts_with($value, 'https://') || str_starts_with($value, 'data:')) {
+            return $value;
+        }
+
+        return Storage::disk('public')->url($value);
     }
 
     public function classStudents(): HasMany

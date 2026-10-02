@@ -47,7 +47,7 @@ class SubjectExamResource extends JsonResource
             'name' => $this->name,
             'about' => $this->about,
             'duration_minutes' => $this->duration_minutes ?? 60,
-            'passing_grade' => $this->passing_grade ?? $this->subject?->passing_grade ?? 75,
+            'passing_grade' => $this->passing_grade ?? ($this->relationLoaded('subject') ? $this->subject?->passing_grade : null) ?? 75,
             'category' => $this->category ?? 'daily_quiz',
             'token' => $this->token,
             'has_token' => !empty($this->token),

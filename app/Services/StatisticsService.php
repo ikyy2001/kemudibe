@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\StatisticsRepository;
+use Illuminate\Support\Facades\Cache;
 
 class StatisticsService
 {
@@ -18,9 +19,17 @@ class StatisticsService
      */
     public function getStatistics(array $entityList): array
     {
-        $statistics = [];
-        
-        foreach ($entityList as $entity) {
+        if (empty($entityList)) {
+            return [];
+        }
+
+        sort($entityList);
+        $cacheKey = 'statistics_counts_' . implode('_', $entityList);
+
+        return Cache::remember($cacheKey, 60, function () use ($entityList) {
+            $statistics = [];
+            
+            foreach ($entityList as $entity) {
             switch ($entity) {
                 case 'users':
                     $statistics['users_total'] = $this->statisticsRepository->getUsersCount();
@@ -71,5 +80,6 @@ class StatisticsService
         }
         
         return $statistics;
+        });
     }
 }

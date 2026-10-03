@@ -135,6 +135,11 @@ Route::middleware(['auth:sanctum', 'role:manager|teacher|student'])->group(funct
     // Classroom Activities (Challenges, Homeworks, Others)
     Route::get('class-rooms/{classroomId}/activities', [ClassroomActivityController::class, 'index']);
     Route::get('class-rooms/{classroomId}/activities/{id}', [ClassroomActivityController::class, 'show']);
+
+    // Academic Schedule & Calendar (Manager, Teacher, and Student)
+    Route::get('student/schedule', [ScheduleController::class, 'index']);
+    Route::get('schedule', [ScheduleController::class, 'index']);
+    Route::post('schedule/events', [ScheduleController::class, 'storeEvent']);
 });
 
 // Teacher-specific routes
@@ -189,10 +194,6 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
     // Student rapport endpoints (no need to pass studentId - gets from auth)
     Route::get('student/classrooms/{classRoomId}/rapport/info', [ClassStudentController::class, 'getStudentRapportInfo']);
     Route::get('student/classrooms/{classRoomId}/rapport/download', [ClassStudentController::class, 'downloadStudentRapport']);
-
-    // Student Schedule & Calendar
-    Route::get('student/schedule', [ScheduleController::class, 'index']);
-    Route::post('schedule/events', [ScheduleController::class, 'storeEvent']);
 });
 
 // Manager & Teacher routes for managing exam attempts and answers

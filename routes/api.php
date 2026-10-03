@@ -26,6 +26,9 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SecurityController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\LessonController;
+use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\ExamProctorController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -38,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('user', [AuthController::class, 'user']);
     Route::get('user/profile', [ProfileController::class, 'getProfile']);
+    Route::get('achievements/leaderboard', [LeaderboardController::class, 'index']);
     Route::match(['put', 'post'], 'user/profile', [ProfileController::class, 'updateProfile']);
     Route::put('user/password', [ProfileController::class, 'updatePassword']);
 });
@@ -185,10 +189,18 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
     // Student rapport endpoints (no need to pass studentId - gets from auth)
     Route::get('student/classrooms/{classRoomId}/rapport/info', [ClassStudentController::class, 'getStudentRapportInfo']);
     Route::get('student/classrooms/{classRoomId}/rapport/download', [ClassStudentController::class, 'downloadStudentRapport']);
+
+    // Student Schedule & Calendar
+    Route::get('student/schedule', [ScheduleController::class, 'index']);
 });
 
 // Manager & Teacher routes for managing exam attempts and answers
 Route::middleware(['auth:sanctum', 'role:manager|teacher'])->group(function () {
+    // Live Exam Proctoring Monitor
+    Route::get('exams/{id}/live-monitor', [ExamProctorController::class, 'getLiveStatus']);
+    Route::post('exams/{id}/students/{studentId}/force-submit', [ExamProctorController::class, 'forceSubmit']);
+    Route::post('exams/{id}/students/{studentId}/reset-session', [ExamProctorController::class, 'resetSession']);
+
     // Classroom Activities Management (Challenges, Homeworks, Others)
     Route::post('class-rooms/{classroomId}/activities', [ClassroomActivityController::class, 'store']);
     Route::put('class-rooms/{classroomId}/activities/{id}', [ClassroomActivityController::class, 'update']);

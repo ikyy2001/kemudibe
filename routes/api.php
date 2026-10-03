@@ -192,6 +192,7 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
 
     // Student Schedule & Calendar
     Route::get('student/schedule', [ScheduleController::class, 'index']);
+    Route::post('schedule/events', [ScheduleController::class, 'storeEvent']);
 });
 
 // Manager & Teacher routes for managing exam attempts and answers

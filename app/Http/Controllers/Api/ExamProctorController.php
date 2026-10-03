@@ -27,28 +27,36 @@ class ExamProctorController extends Controller
         try {
             $exam = SubjectExam::with(['subject', 'examQuestions'])->findOrFail($id);
 
-            // 1. Find all students enrolled in the classrooms linked to this subject
-            $studentsWithAccess = User::role('student')
+            // 1. Fetch all attempts for this exam with student & violations
+            $attempts = ExamAttempt::with([
+                'student.classStudents.classRoom',
+                'violations' => function ($q) {
+                    $q->orderBy('occurred_at', 'desc');
+                }
+            ])
+            ->where('subject_exam_id', $id)
+            ->get()
+            ->keyBy('student_id');
+
+            // 2. Find all students enrolled in the classrooms linked to this subject
+            $enrolledStudents = User::role('student')
                 ->whereHas('classStudents.classRoom.classSubjects', function ($query) use ($exam) {
                     $query->where('subject_id', $exam->subject_id);
                 })
                 ->with(['classStudents.classRoom'])
-                ->get();
-
-            // 2. Fetch exam attempts for this exam with violation logs
-            $attempts = ExamAttempt::with(['violations' => function ($q) {
-                    $q->orderBy('occurred_at', 'desc');
-                }])
-                ->where('subject_exam_id', $id)
                 ->get()
-                ->keyBy('student_id');
+                ->keyBy('id');
+
+            // 3. Merge: ALL students with attempts + ALL enrolled students
+            $attemptStudents = $attempts->map(fn($att) => $att->student)->filter()->keyBy('id');
+            $allTargetStudents = $enrolledStudents->union($attemptStudents)->values();
 
             $now = Carbon::now();
             $totalQuestions = $exam->examQuestions->count();
 
             $studentList = [];
             $stats = [
-                'total_students' => $studentsWithAccess->count(),
+                'total_students' => $allTargetStudents->count(),
                 'active' => 0,
                 'idle' => 0,
                 'completed' => 0,
@@ -56,7 +64,7 @@ class ExamProctorController extends Controller
                 'with_violations' => 0,
             ];
 
-            foreach ($studentsWithAccess as $student) {
+            foreach ($allTargetStudents as $student) {
                 $attempt = $attempts->get($student->id);
                 $classroomName = $student->classStudents->first()?->classRoom?->name ?? 'Unassigned';
 

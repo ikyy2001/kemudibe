@@ -27,35 +27,31 @@ class ScheduleController extends Controller
                 ->where('student_id', $student->id)
                 ->get();
 
-            $classroomIds = $enrolledClassrooms->pluck('class_room_id')->filter()->unique()->values();
+            // 2. Get subjects linked to these classrooms (or all subjects if not enrolled)
+            if ($classroomIds->isNotEmpty()) {
+                $subjectIds = ClassSubject::whereIn('class_room_id', $classroomIds)
+                    ->pluck('subject_id')
+                    ->filter()
+                    ->unique()
+                    ->values();
 
-            if ($classroomIds->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'events' => [],
-                        'classrooms' => [],
-                        'summary' => [
-                            'total_events' => 0,
-                            'total_exams' => 0,
-                            'upcoming_exams' => 0,
-                            'total_activities' => 0,
-                        ],
-                    ]
-                ]);
+                $exams = SubjectExam::with(['subject', 'topic'])
+                    ->whereIn('subject_id', $subjectIds)
+                    ->get();
+
+                $activities = ClassroomActivity::with('classRoom')
+                    ->whereIn('class_room_id', $classroomIds)
+                    ->get();
+
+                $projects = Project::with('classRoom')
+                    ->whereIn('class_room_id', $classroomIds)
+                    ->get();
+            } else {
+                // Fallback for students not yet enrolled: show all upcoming/active exams
+                $exams = SubjectExam::with(['subject', 'topic'])->get();
+                $activities = ClassroomActivity::with('classRoom')->get();
+                $projects = Project::with('classRoom')->get();
             }
-
-            // 2. Get subjects linked to these classrooms
-            $subjectIds = ClassSubject::whereIn('class_room_id', $classroomIds)
-                ->pluck('subject_id')
-                ->filter()
-                ->unique()
-                ->values();
-
-            // 3. Fetch Subject Exams
-            $exams = SubjectExam::with(['subject', 'topic'])
-                ->whereIn('subject_id', $subjectIds)
-                ->get();
 
             // 4. Fetch student attempts for these exams
             $examIds = $exams->pluck('id');
@@ -188,6 +184,52 @@ class ScheduleController extends Controller
                 'success' => false,
                 'message' => 'Failed to retrieve schedule: ' . $e->getMessage(),
                 'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Store custom manual event into the schedule
+     */
+    public function storeEvent(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $data = $request->validate([
+                'title' => 'required|string|max:255',
+                'type' => 'nullable|string',
+                'due_date' => 'required|date',
+                'description' => 'nullable|string',
+                'class_room_id' => 'nullable|integer',
+            ]);
+
+            // Assign default class_room_id if not given
+            $classroomId = $data['class_room_id'] ?? null;
+            if (!$classroomId) {
+                $firstClassroom = \App\Models\ClassRoom::first();
+                $classroomId = $firstClassroom ? $firstClassroom->id : 1;
+            }
+
+            $activity = ClassroomActivity::create([
+                'class_room_id' => $classroomId,
+                'title' => $data['title'],
+                'type' => 'other',
+                'description' => $data['description'] ?? null,
+                'due_date' => $data['due_date'],
+                'status' => 'active',
+                'points' => 0,
+                'created_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Agenda kegiatan berhasil ditambahkan ke kalender.',
+                'data' => $activity
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menambahkan agenda: ' . $e->getMessage()
             ], 500);
         }
     }

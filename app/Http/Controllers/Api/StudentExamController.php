@@ -206,13 +206,19 @@ class StudentExamController extends Controller
             $violationType = $request->input('violation_type', 'unknown_violation');
             $details = $request->input('details');
             $deviceToken = $request->header('X-Device-Token') ?: $request->input('device_token');
+            $weight = $request->has('weight') ? (float)$request->input('weight') : null;
+            $durationSeconds = (int)$request->input('duration_seconds', 0);
+            $triggerFreeze = $request->boolean('trigger_freeze', false);
 
             $result = $this->studentExamService->logViolation(
                 $student->id,
                 $examId,
                 $violationType,
                 $details,
-                $deviceToken
+                $deviceToken,
+                $weight,
+                $durationSeconds,
+                $triggerFreeze
             );
 
             return response()->json([
@@ -233,6 +239,33 @@ class StudentExamController extends Controller
                     'message' => $e->getMessage()
                 ], 409);
             }
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 400);
+        }
+    }
+
+    /**
+     * Verify Supervisor PIN to unlock frozen exam session
+     */
+    public function verifySupervisorPin(Request $request, int $examId)
+    {
+        try {
+            $student = $request->user();
+            $pin = (string)$request->input('pin', '');
+
+            $result = $this->studentExamService->verifySupervisorPin($student->id, $examId, $pin);
+
+            return response()->json([
+                'success' => true,
+                'message' => $result['message'],
+                'data' => [
+                    'attempt' => new ExamAttemptResource($result['attempt']),
+                ]
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),

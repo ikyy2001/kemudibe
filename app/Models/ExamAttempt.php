@@ -24,16 +24,32 @@ class ExamAttempt extends Model
         'last_activity_at',
         'violation_count',
         'max_violations',
+        'violation_score',
+        'max_violation_score',
+        'is_frozen',
+        'frozen_at',
+        'freeze_count',
+        'last_heartbeat_at',
+        'offline_gaps_count',
+        'total_offline_seconds',
         'forced_reason',
     ];
 
     protected $casts = [
         'is_completed' => 'boolean',
         'has_passed' => 'boolean',
+        'is_frozen' => 'boolean',
         'completed_at' => 'datetime',
         'last_activity_at' => 'datetime',
+        'last_heartbeat_at' => 'datetime',
+        'frozen_at' => 'datetime',
         'violation_count' => 'integer',
         'max_violations' => 'integer',
+        'violation_score' => 'float',
+        'max_violation_score' => 'float',
+        'freeze_count' => 'integer',
+        'offline_gaps_count' => 'integer',
+        'total_offline_seconds' => 'integer',
     ];
 
     public function student(): BelongsTo

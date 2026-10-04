@@ -186,6 +186,7 @@ Route::middleware(['auth:sanctum', 'role:student'])->group(function () {
     Route::post('student/exams/{examId}/questions/{questionId}/answer', [StudentExamController::class, 'submitAnswer']);
     Route::post('student/exams/{examId}/complete', [StudentExamController::class, 'completeExam']);
     Route::post('student/exams/{examId}/log-violation', [StudentExamController::class, 'logViolation']);
+    Route::post('student/exams/{examId}/verify-supervisor-pin', [StudentExamController::class, 'verifySupervisorPin']);
     Route::post('student/exams/{examId}/heartbeat', [StudentExamController::class, 'heartbeat']);
     Route::get('student/exams/{examId}/progress', [StudentExamController::class, 'getProgress']);
     Route::get('student/exams/{examId}/results', [StudentExamController::class, 'getResults']);

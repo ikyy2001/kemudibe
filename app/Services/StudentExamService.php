@@ -54,6 +54,9 @@ class StudentExamService
         // Get student's attempt if exists
         $attempt = $this->studentExamRepository->getStudentAttempt($studentId, $examId);
 
+        // Deterministically shuffle multiple choice options for this student
+        $this->shuffleOptionsForStudent($exam, $studentId);
+
         return [
             'exam' => $exam,
             'questions' => $exam->examQuestions,
@@ -135,6 +138,7 @@ class StudentExamService
                     'is_completed' => false,
                     'current_exam_device_token' => $deviceToken,
                     'last_activity_at' => now(),
+                    'last_heartbeat_at' => now(),
                     'total_questions' => $exam->examQuestions->count(),
                     'answered_questions' => 0,
                     'total_points' => $exam->total_points,
@@ -142,6 +146,14 @@ class StudentExamService
                     'has_passed' => false,
                     'completed_at' => null,
                     'forced_reason' => null,
+                    'violation_count' => 0,
+                    'violation_score' => 0.0,
+                    'max_violation_score' => 3.0,
+                    'is_frozen' => false,
+                    'frozen_at' => null,
+                    'freeze_count' => 0,
+                    'offline_gaps_count' => 0,
+                    'total_offline_seconds' => 0,
                 ]);
                 $attempt = $existingAttempt->fresh();
             } else {
@@ -153,8 +165,16 @@ class StudentExamService
                     'is_completed' => false,
                     'current_exam_device_token' => $deviceToken,
                     'last_activity_at' => now(),
+                    'last_heartbeat_at' => now(),
                     'violation_count' => 0,
                     'max_violations' => 3,
+                    'violation_score' => 0.0,
+                    'max_violation_score' => 3.0,
+                    'is_frozen' => false,
+                    'frozen_at' => null,
+                    'freeze_count' => 0,
+                    'offline_gaps_count' => 0,
+                    'total_offline_seconds' => 0,
                     'total_questions' => $exam->examQuestions->count(),
                     'answered_questions' => 0,
                     'total_points' => $exam->total_points,
@@ -163,6 +183,9 @@ class StudentExamService
                     'completed_at' => null,
                 ]);
             }
+
+            // Deterministically shuffle multiple choice options for this student
+            $this->shuffleOptionsForStudent($exam, $studentId);
 
             $durationMinutes = $exam->duration_minutes ?: $this->getTimeRemaining($exam);
 
@@ -338,11 +361,19 @@ class StudentExamService
     }
 
     /**
-     * Log a proctoring violation from the client
+     * Log a proctoring violation from the client with weighted scoring and freeze support
      */
-    public function logViolation(int $studentId, int $examId, string $violationType, $details = null, ?string $deviceToken = null): array
-    {
-        return DB::transaction(function () use ($studentId, $examId, $violationType, $details, $deviceToken) {
+    public function logViolation(
+        int $studentId, 
+        int $examId, 
+        string $violationType, 
+        $details = null, 
+        ?string $deviceToken = null, 
+        ?float $weight = null, 
+        int $durationSeconds = 0, 
+        bool $triggerFreeze = false
+    ): array {
+        return DB::transaction(function () use ($studentId, $examId, $violationType, $details, $deviceToken, $weight, $durationSeconds, $triggerFreeze) {
             $attempt = $this->studentExamRepository->getStudentAttempt($studentId, $examId);
             if (!$attempt) {
                 throw new \Exception('No active exam attempt found');
@@ -356,35 +387,66 @@ class StudentExamService
                 return [
                     'violation_count' => $attempt->violation_count ?? 0,
                     'max_violations' => $attempt->max_violations ?? 3,
+                    'violation_score' => (float)($attempt->violation_score ?? 0.0),
+                    'max_violation_score' => (float)($attempt->max_violation_score ?? 3.0),
+                    'is_frozen' => false,
                     'is_locked' => true,
                     'forced_submit' => false,
                     'message' => 'Ujian sudah diselesaikan sebelumnya.'
                 ];
             }
 
+            // Determine violation weight:
+            // Light (0.5 pt): brief blur, brief tab switch (< 30s), notification interruption
+            // Full (1.0 pt): fullscreen exit, prolonged away (> 30s)
+            if ($weight === null) {
+                if ($violationType === 'fullscreen_exit' || $durationSeconds >= 30) {
+                    $weight = 1.0;
+                } else {
+                    $weight = 0.5;
+                }
+            }
+
             // Create violation log record
             ExamViolation::create([
                 'exam_attempt_id' => $attempt->id,
                 'violation_type' => $violationType,
+                'weight' => $weight,
+                'duration_seconds' => $durationSeconds,
+                'is_offline_gap' => ($violationType === 'offline_gap'),
                 'details' => is_array($details) ? json_encode($details) : (string) $details,
                 'occurred_at' => now(),
             ]);
 
             $newCount = ($attempt->violation_count ?? 0) + 1;
+            $newScore = round((float)($attempt->violation_score ?? 0.0) + $weight, 1);
+            $maxScore = (float)($attempt->max_violation_score ?? 3.0);
             $maxViolations = $attempt->max_violations ?? 3;
-            $isLocked = $newCount >= $maxViolations;
+
+            $isLocked = ($newScore >= $maxScore);
+
+            $updateData = [
+                'violation_count' => $newCount,
+                'violation_score' => $newScore,
+                'last_activity_at' => now(),
+            ];
+
+            if ($triggerFreeze && !$isLocked) {
+                $updateData['is_frozen'] = true;
+                $updateData['frozen_at'] = now();
+                $updateData['freeze_count'] = ($attempt->freeze_count ?? 0) + 1;
+            }
 
             if ($isLocked) {
                 $exam = $this->studentExamRepository->getExamWithQuestions($examId);
                 $this->createPlaceholderAnswers($studentId, $exam);
 
-                $attempt->update([
-                    'violation_count' => $newCount,
-                    'is_completed' => true,
-                    'completed_at' => now(),
-                    'forced_reason' => 'violation_limit_reached',
-                    'last_activity_at' => now(),
-                ]);
+                $updateData['is_completed'] = true;
+                $updateData['is_frozen'] = false;
+                $updateData['completed_at'] = now();
+                $updateData['forced_reason'] = 'violation_limit_reached';
+
+                $attempt->update($updateData);
 
                 $this->updateAttemptTotals($studentId, $examId);
                 $attempt->refresh();
@@ -392,29 +454,32 @@ class StudentExamService
                 return [
                     'violation_count' => $newCount,
                     'max_violations' => $maxViolations,
+                    'violation_score' => $newScore,
+                    'max_violation_score' => $maxScore,
+                    'is_frozen' => false,
                     'is_locked' => true,
                     'forced_submit' => true,
                     'message' => 'Batas maksimal pelanggaran telah tercapai. Ujian Anda telah dikunci dan dikumpulkan otomatis.'
                 ];
             }
 
-            $attempt->update([
-                'violation_count' => $newCount,
-                'last_activity_at' => now(),
-            ]);
+            $attempt->update($updateData);
 
             return [
                 'violation_count' => $newCount,
                 'max_violations' => $maxViolations,
+                'violation_score' => $newScore,
+                'max_violation_score' => $maxScore,
+                'is_frozen' => (bool)($updateData['is_frozen'] ?? $attempt->is_frozen),
                 'is_locked' => false,
                 'forced_submit' => false,
-                'message' => "Peringatan! Pelanggaran ke-{$newCount} dari {$maxViolations} tercatat."
+                'message' => "Insiden tercatat (+{$weight} poin). Total skor pelanggaran: {$newScore} dari {$maxScore}."
             ];
         });
     }
 
     /**
-     * Heartbeat check for active exam attempt & device session
+     * Heartbeat check with offline gap detection
      */
     public function heartbeat(int $studentId, int $examId, ?string $deviceToken = null): array
     {
@@ -427,15 +492,68 @@ class StudentExamService
             $this->validateDeviceSession($attempt, $deviceToken);
         }
 
-        $attempt->update(['last_activity_at' => now()]);
+        $now = now();
+        $lastHeartbeat = $attempt->last_heartbeat_at ?: $attempt->last_activity_at;
+
+        // Detect offline gap (if gap > 35 seconds, missed multiple heartbeats)
+        if ($lastHeartbeat && $now->diffInSeconds($lastHeartbeat) > 35 && !$attempt->is_completed) {
+            $gapSeconds = $now->diffInSeconds($lastHeartbeat);
+            $gapWeight = $gapSeconds >= 60 ? 1.0 : 0.5;
+
+            ExamViolation::create([
+                'exam_attempt_id' => $attempt->id,
+                'violation_type' => 'offline_gap',
+                'weight' => $gapWeight,
+                'duration_seconds' => $gapSeconds,
+                'is_offline_gap' => true,
+                'details' => "Terdeteksi jeda koneksi/offline selama {$gapSeconds} detik (potensi Airplane Mode/Network Interruption).",
+                'occurred_at' => $now,
+            ]);
+
+            $attempt->increment('offline_gaps_count');
+            $attempt->increment('total_offline_seconds', $gapSeconds);
+
+            $newScore = round((float)($attempt->violation_score ?? 0.0) + $gapWeight, 1);
+            $maxScore = (float)($attempt->max_violation_score ?? 3.0);
+
+            if ($newScore >= $maxScore) {
+                $exam = $this->studentExamRepository->getExamWithQuestions($examId);
+                $this->createPlaceholderAnswers($studentId, $exam);
+
+                $attempt->update([
+                    'violation_score' => $newScore,
+                    'is_completed' => true,
+                    'is_frozen' => false,
+                    'completed_at' => $now,
+                    'forced_reason' => 'violation_limit_reached',
+                    'last_activity_at' => $now,
+                    'last_heartbeat_at' => $now,
+                ]);
+
+                $this->updateAttemptTotals($studentId, $examId);
+            } else {
+                $attempt->update([
+                    'violation_score' => $newScore,
+                    'last_activity_at' => $now,
+                    'last_heartbeat_at' => $now,
+                ]);
+            }
+        } else {
+            $attempt->update([
+                'last_activity_at' => $now,
+                'last_heartbeat_at' => $now,
+            ]);
+        }
 
         $exam = $this->subjectExamRepository->findWithRelations($examId);
 
         return [
             'status' => 'active',
             'is_completed' => (bool)$attempt->is_completed,
+            'is_frozen' => (bool)$attempt->is_frozen,
             'violation_count' => $attempt->violation_count ?? 0,
-            'max_violations' => $attempt->max_violations ?? 3,
+            'violation_score' => (float)($attempt->violation_score ?? 0.0),
+            'max_violation_score' => (float)($attempt->max_violation_score ?? 3.0),
             'forced_reason' => $attempt->forced_reason,
             'time_remaining_minutes' => $exam ? $this->getTimeRemaining($exam) : 0,
         ];
@@ -624,5 +742,104 @@ class StudentExamService
                 'has_passed' => $hasPassed
             ]);
         }
+    }
+
+    /**
+     * Deterministically shuffle multiple choice options for a student
+     */
+    private function shuffleOptionsForStudent(SubjectExam $exam, int $studentId): void
+    {
+        if (!$exam->relationLoaded('examQuestions')) {
+            return;
+        }
+
+        foreach ($exam->examQuestions as $question) {
+            if ($question->type === 'multiple_choice' && $question->relationLoaded('questionOptions')) {
+                $options = $question->questionOptions->values();
+                if ($options->count() > 1) {
+                    // Seed PRNG deterministically based on student, question, and exam
+                    $seed = crc32("opt_{$studentId}_{$question->id}_{$exam->id}");
+                    mt_srand($seed);
+                    $indices = range(0, $options->count() - 1);
+                    for ($i = count($indices) - 1; $i > 0; $i--) {
+                        $j = mt_rand(0, $i);
+                        $temp = $indices[$i];
+                        $indices[$i] = $indices[$j];
+                        $indices[$j] = $temp;
+                    }
+                    mt_srand(); // reset seed back to random
+                    $shuffled = collect($indices)->map(fn($idx) => $options[$idx]);
+                    $question->setRelation('questionOptions', $shuffled);
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate dynamic 6-digit Supervisor PIN changing every 60 seconds
+     */
+    public function getSupervisorPin(int $examId): array
+    {
+        $window = (int)floor(time() / 60);
+        $secret = config('app.key') . '_supervisor_pin_' . $examId;
+        $hash = hash_hmac('sha256', (string)$window, $secret);
+        $pin = str_pad((string)(hexdec(substr($hash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
+        $secondsRemaining = 60 - (time() % 60);
+
+        return [
+            'pin' => $pin,
+            'seconds_remaining' => $secondsRemaining,
+        ];
+    }
+
+    /**
+     * Verify Supervisor PIN to unlock a frozen student session
+     */
+    public function verifySupervisorPin(int $studentId, int $examId, string $pin): array
+    {
+        $pin = trim($pin);
+        if (strlen($pin) !== 6 || !ctype_digit($pin)) {
+            throw new \Exception('PIN verifikasi harus berupa 6 digit angka.');
+        }
+
+        $currentPinData = $this->getSupervisorPin($examId);
+        $currentPin = $currentPinData['pin'];
+
+        // Also check previous window (60s grace period)
+        $prevWindow = (int)floor(time() / 60) - 1;
+        $secret = config('app.key') . '_supervisor_pin_' . $examId;
+        $prevHash = hash_hmac('sha256', (string)$prevWindow, $secret);
+        $prevPin = str_pad((string)(hexdec(substr($prevHash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
+
+        if ($pin !== $currentPin && $pin !== $prevPin) {
+            throw new \Exception('PIN verifikasi salah atau telah kedaluwarsa. Silakan minta PIN terbaru dari pengawas.');
+        }
+
+        $attempt = $this->studentExamRepository->getStudentAttempt($studentId, $examId);
+        if (!$attempt) {
+            throw new \Exception('Sesi ujian siswa tidak ditemukan.');
+        }
+
+        $attempt->update([
+            'is_frozen' => false,
+            'frozen_at' => null,
+            'last_activity_at' => now(),
+        ]);
+
+        ExamViolation::create([
+            'exam_attempt_id' => $attempt->id,
+            'violation_type' => 'supervisor_unlocked',
+            'weight' => 0.0,
+            'duration_seconds' => 0,
+            'is_offline_gap' => false,
+            'details' => 'Sesi ujian berhasil dibuka kembali oleh pengawas menggunakan PIN verifikasi.',
+            'occurred_at' => now(),
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'PIN terverifikasi! Sesi ujian berhasil dibuka kembali.',
+            'attempt' => $attempt->fresh(),
+        ];
     }
 }

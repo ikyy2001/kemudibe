@@ -54,11 +54,14 @@ class ExamProctorController extends Controller
             $now = Carbon::now();
             $totalQuestions = $exam->examQuestions->count();
 
+            $supervisorPinData = $this->studentExamService->getSupervisorPin($exam->id);
+
             $studentList = [];
             $stats = [
                 'total_students' => $allTargetStudents->count(),
                 'active' => 0,
                 'idle' => 0,
+                'frozen' => 0,
                 'completed' => 0,
                 'not_started' => 0,
                 'with_violations' => 0,
@@ -73,6 +76,13 @@ class ExamProctorController extends Controller
                     $stats['not_started']++;
                     $answeredCount = 0;
                     $violationCount = 0;
+                    $violationScore = 0.0;
+                    $maxViolationScore = 3.0;
+                    $isFrozen = false;
+                    $frozenAt = null;
+                    $freezeCount = 0;
+                    $offlineGapsCount = 0;
+                    $totalOfflineSeconds = 0;
                     $violations = [];
                     $lastActive = null;
                     $deviceToken = null;
@@ -81,20 +91,36 @@ class ExamProctorController extends Controller
                     $stats['completed']++;
                     $answeredCount = $attempt->answered_questions ?? 0;
                     $violationCount = $attempt->violation_count ?? 0;
+                    $violationScore = (float)($attempt->violation_score ?? 0.0);
+                    $maxViolationScore = (float)($attempt->max_violation_score ?? 3.0);
+                    $isFrozen = false;
+                    $frozenAt = null;
+                    $freezeCount = $attempt->freeze_count ?? 0;
+                    $offlineGapsCount = $attempt->offline_gaps_count ?? 0;
+                    $totalOfflineSeconds = $attempt->total_offline_seconds ?? 0;
                     $violations = $attempt->violations;
                     $lastActive = $attempt->completed_at ? $attempt->completed_at->format('Y-m-d H:i:s') : null;
                     $deviceToken = $attempt->current_exam_device_token;
                 } else {
                     $answeredCount = $attempt->answered_questions ?? 0;
                     $violationCount = $attempt->violation_count ?? 0;
+                    $violationScore = (float)($attempt->violation_score ?? 0.0);
+                    $maxViolationScore = (float)($attempt->max_violation_score ?? 3.0);
+                    $isFrozen = (bool)$attempt->is_frozen;
+                    $frozenAt = $attempt->frozen_at ? $attempt->frozen_at->format('H:i:s') : null;
+                    $freezeCount = $attempt->freeze_count ?? 0;
+                    $offlineGapsCount = $attempt->offline_gaps_count ?? 0;
+                    $totalOfflineSeconds = $attempt->total_offline_seconds ?? 0;
                     $violations = $attempt->violations;
                     $deviceToken = $attempt->current_exam_device_token;
 
                     $lastActivity = $attempt->last_activity_at;
                     $lastActive = $lastActivity ? $lastActivity->format('Y-m-d H:i:s') : null;
 
-                    // If active within last 2 minutes, active; otherwise idle
-                    if ($lastActivity && $now->diffInSeconds($lastActivity) <= 120) {
+                    if ($isFrozen) {
+                        $status = 'frozen';
+                        $stats['frozen']++;
+                    } elseif ($lastActivity && $now->diffInSeconds($lastActivity) <= 120) {
                         $status = 'active';
                         $stats['active']++;
                     } else {
@@ -103,7 +129,7 @@ class ExamProctorController extends Controller
                     }
                 }
 
-                if ($violationCount > 0) {
+                if ($violationCount > 0 || $violationScore > 0) {
                     $stats['with_violations']++;
                 }
 
@@ -115,11 +141,18 @@ class ExamProctorController extends Controller
                     'classroom' => $classroomName,
                     'status' => $status,
                     'is_completed' => $attempt ? (bool) $attempt->is_completed : false,
+                    'is_frozen' => $isFrozen,
+                    'frozen_at' => $frozenAt,
+                    'freeze_count' => $freezeCount,
+                    'offline_gaps_count' => $offlineGapsCount,
+                    'total_offline_seconds' => $totalOfflineSeconds,
                     'answered_questions' => $answeredCount,
                     'total_questions' => $totalQuestions,
                     'progress_percentage' => $totalQuestions > 0 ? round(($answeredCount / $totalQuestions) * 100) : 0,
                     'violation_count' => $violationCount,
                     'max_violations' => $attempt?->max_violations ?? 3,
+                    'violation_score' => $violationScore,
+                    'max_violation_score' => $maxViolationScore,
                     'forced_reason' => $attempt?->forced_reason,
                     'last_activity_at' => $lastActive,
                     'has_device_token' => !empty($deviceToken),
@@ -127,6 +160,9 @@ class ExamProctorController extends Controller
                         return [
                             'id' => $v->id,
                             'type' => $v->violation_type,
+                            'weight' => (float)($v->weight ?? 1.0),
+                            'duration_seconds' => (int)($v->duration_seconds ?? 0),
+                            'is_offline_gap' => (bool)($v->is_offline_gap ?? false),
                             'details' => $v->details,
                             'occurred_at' => $v->occurred_at ? Carbon::parse($v->occurred_at)->format('H:i:s') : null,
                         ];
@@ -135,12 +171,15 @@ class ExamProctorController extends Controller
                 ];
             }
 
-            // Sort: students with violations first, then active, then idle, then completed, then not_started
+            // Sort: students with violations first, then active/frozen, then idle, then completed, then not_started
             usort($studentList, function ($a, $b) {
+                if ($b['violation_score'] !== $a['violation_score']) {
+                    return $b['violation_score'] <=> $a['violation_score'];
+                }
                 if ($b['violation_count'] !== $a['violation_count']) {
                     return $b['violation_count'] <=> $a['violation_count'];
                 }
-                $order = ['active' => 1, 'idle' => 2, 'completed' => 3, 'not_started' => 4];
+                $order = ['frozen' => 1, 'active' => 2, 'idle' => 3, 'completed' => 4, 'not_started' => 5];
                 return ($order[$a['status']] ?? 9) <=> ($order[$b['status']] ?? 9);
             });
 
@@ -156,6 +195,8 @@ class ExamProctorController extends Controller
                         'started_at' => $exam->started_at ? Carbon::parse($exam->started_at)->format('Y-m-d H:i') : null,
                         'ended_at' => $exam->ended_at ? Carbon::parse($exam->ended_at)->format('Y-m-d H:i') : null,
                         'token' => $exam->token,
+                        'supervisor_pin' => $supervisorPinData['pin'],
+                        'supervisor_pin_expires_in' => $supervisorPinData['seconds_remaining'],
                     ],
                     'stats' => $stats,
                     'students' => $studentList,
@@ -217,6 +258,8 @@ class ExamProctorController extends Controller
             
             $updateData = [
                 'current_exam_device_token' => null,
+                'is_frozen' => false,
+                'frozen_at' => null,
                 'last_activity_at' => now(),
             ];
 
@@ -227,6 +270,9 @@ class ExamProctorController extends Controller
                 // Give back 1 violation leeway if limit reached
                 if ($attempt->violation_count >= $attempt->max_violations) {
                     $updateData['violation_count'] = max(0, $attempt->max_violations - 1);
+                }
+                if (($attempt->violation_score ?? 0) >= ($attempt->max_violation_score ?? 3.0)) {
+                    $updateData['violation_score'] = max(0.0, ($attempt->max_violation_score ?? 3.0) - 1.0);
                 }
             }
 

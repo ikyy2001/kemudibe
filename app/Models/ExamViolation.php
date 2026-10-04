@@ -13,11 +13,17 @@ class ExamViolation extends Model
     protected $fillable = [
         'exam_attempt_id',
         'violation_type',
+        'weight',
+        'duration_seconds',
+        'is_offline_gap',
         'details',
         'occurred_at',
     ];
 
     protected $casts = [
+        'weight' => 'float',
+        'duration_seconds' => 'integer',
+        'is_offline_gap' => 'boolean',
         'occurred_at' => 'datetime',
     ];
 

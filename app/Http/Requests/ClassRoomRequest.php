@@ -24,7 +24,7 @@ class ClassRoomRequest extends FormRequest
         $id = $this->route('class_room');
 
         return [
-            'name' => 'required|string|max:255|unique:class_rooms,name,' . $id,
+            'name' => ['required', 'string', 'max:255', \App\Rules\TenantRule::unique('class_rooms', 'name', $id)],
             'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'grade' => 'required|integer|min:1|max:12',
         ];

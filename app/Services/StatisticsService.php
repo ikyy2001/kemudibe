@@ -24,7 +24,8 @@ class StatisticsService
         }
 
         sort($entityList);
-        $cacheKey = 'statistics_counts_' . implode('_', $entityList);
+        $tenantId = app(\App\Services\InstitutionContext::class)->getId() ?? 'global';
+        $cacheKey = "inst:{$tenantId}:statistics_counts_" . implode('_', $entityList);
 
         return Cache::remember($cacheKey, 60, function () use ($entityList) {
             $statistics = [];

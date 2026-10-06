@@ -22,7 +22,7 @@ class DuplicateQuestionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subject_exam_id' => 'required|integer|exists:subject_exams,id'
+            'subject_exam_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subject_exams', 'id')]
         ];
     }
 

@@ -22,8 +22,22 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email'    => 'required|email',
-            'password' => 'required|string',
+            'institution_code' => 'required|string|max:60',
+            'username'         => 'required|string|max:60',
+            'password'         => 'required|string',
+            'remember'         => 'nullable|boolean',
+        ];
+    }
+
+    /**
+     * Custom validation messages
+     */
+    public function messages(): array
+    {
+        return [
+            'institution_code.required' => 'Kode lembaga wajib diisi.',
+            'username.required'         => 'ID Pengguna / Username wajib diisi.',
+            'password.required'         => 'Password wajib diisi.',
         ];
     }
 }

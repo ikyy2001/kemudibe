@@ -25,7 +25,7 @@ class SubjectExamDuplicateRequest extends FormRequest
             'name' => 'required|string|max:255',
             'started_at' => 'required|date|after_or_equal:today',
             'ended_at' => 'required|date|after:started_at',
-            'subject_id' => 'sometimes|integer|exists:subjects,id',
+            'subject_id' => ['sometimes', 'integer', \App\Rules\TenantRule::exists('subjects', 'id')],
             'about' => 'sometimes|string|max:1000',
             'copy_questions' => 'sometimes|boolean'
         ];

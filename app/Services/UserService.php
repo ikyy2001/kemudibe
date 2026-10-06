@@ -217,8 +217,32 @@ class UserService
             $role = 'student';
             if (in_array($rawRole, ['teacher', 'guru', 'pengajar', 'ustadz', 'ustadzah'])) {
                 $role = 'teacher';
-            } elseif (in_array($rawRole, ['manager', 'admin', 'administrator'])) {
-                $role = 'manager';
+            } elseif (in_array($rawRole, ['manager', 'admin', 'administrator', 'pic'])) {
+                $role = 'pic';
+            }
+
+            // 7. Check student quota
+            $institution = app(\App\Services\InstitutionContext::class)->get();
+            if ($role === 'student' && $institution && !$institution->canAddStudents(1)) {
+                $errors[] = [
+                    'row' => $rowNum,
+                    'email' => $email,
+                    'reason' => "Batas kuota siswa untuk lembaga ini telah tercapai ({$institution->max_students} siswa)."
+                ];
+                continue;
+            }
+
+            // Derive username if not present
+            $username = isset($row['username']) && !empty($row['username'])
+                ? strtolower(trim((string)$row['username']))
+                : strtolower(explode('@', $email)[0]);
+
+            // Ensure username uniqueness within tenant
+            $originalUsername = $username;
+            $counter = 1;
+            while (\App\Models\User::where('username', $username)->exists()) {
+                $username = $originalUsername . $counter;
+                $counter++;
             }
 
             // Create user safely in transaction
@@ -226,11 +250,14 @@ class UserService
                 \Illuminate\Support\Facades\DB::beginTransaction();
 
                 $user = \App\Models\User::create([
+                    'institution_id' => $institution?->id,
                     'name' => $name,
+                    'username' => $username,
                     'email' => $email,
                     'password' => \Illuminate\Support\Facades\Hash::make($password),
+                    'must_change_password' => true,
                     'gender' => $gender,
-                    'photo' => null, // Photo is optional; students add it themselves later
+                    'photo' => 'default.png',
                     'email_verified_at' => now(),
                 ]);
 
@@ -259,7 +286,9 @@ class UserService
                 $imported[] = [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'username' => $user->username,
                     'email' => $user->email,
+                    'plain_password' => $password,
                     'role' => $role,
                     'gender' => $gender,
                 ];

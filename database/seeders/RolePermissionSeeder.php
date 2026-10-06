@@ -13,11 +13,13 @@ class RolePermissionSeeder extends Seeder
         // Clear cache
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Create roles only (no specific permissions needed)
-        Role::create(['name' => 'manager', 'guard_name' => 'web']);
-        Role::create(['name' => 'teacher', 'guard_name' => 'web']);
-        Role::create(['name' => 'student', 'guard_name' => 'web']);
+        // Create roles
+        Role::firstOrCreate(['name' => 'superadmin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'pic', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'web']); // for backwards compatibility
+        Role::firstOrCreate(['name' => 'teacher', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'student', 'guard_name' => 'web']);
 
-        $this->command->info('Roles created successfully (manager, teacher, student)!');
+        $this->command->info('Roles created successfully (superadmin, pic, manager, teacher, student)!');
     }
 }

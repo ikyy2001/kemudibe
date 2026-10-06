@@ -11,7 +11,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\InstitutionContext::class);
     }
 
     /**
@@ -19,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \App\Models\User::observe(\App\Observers\UserObserver::class);
+        \App\Models\SubjectExam::observe(\App\Observers\SubjectExamObserver::class);
     }
 }

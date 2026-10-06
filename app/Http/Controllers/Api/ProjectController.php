@@ -67,8 +67,8 @@ class ProjectController extends Controller
                 'category' => 'nullable|string|max:100',
                 'status' => 'nullable|in:planning,in_progress,completed,on_hold',
                 'progress' => 'nullable|integer|min:0|max:100',
-                'class_room_id' => 'nullable|exists:class_rooms,id',
-                'leader_id' => 'nullable|exists:users,id',
+                'class_room_id' => ['nullable', \App\Rules\TenantRule::exists('class_rooms', 'id')],
+                'leader_id' => ['nullable', \App\Rules\TenantRule::exists('users', 'id')],
                 'due_date' => 'nullable|date',
             ]);
 

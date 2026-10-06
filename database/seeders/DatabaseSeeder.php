@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -12,72 +11,23 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->command->info('🚀 Starting Jawara CBT Database Seeding (Basic Mode)...');
+        $this->command->info('🚀 Starting Kemudi LMS Multi-Institution Database Seeding...');
 
-        // Run seeders in dependency order
         $this->call([
-            RolePermissionSeeder::class,    // 1. Create roles and permissions first
-            // UserSeeder::class,           // 2. Commented out - Creates 1000+ users (too much data)
-            // TopicSeeder::class,          // 3. Commented out - Creates 1000 topics
-            // SubjectSeeder::class,        // 4. Commented out - Creates 1000 subjects
-            // ClassRoomSeeder::class,      // 5. Commented out - Creates 1000 classrooms
-            // ExamDataSeeder::class,       // 6. Commented out - Creates massive exam data
+            RolePermissionSeeder::class,
+            MultiInstitutionSeeder::class,
         ]);
 
-        $this->command->info('Creating basic user accounts...');
-        $this->createBasicUsers();
-
         $this->command->info('');
-        $this->command->info('✅ Database seeding completed successfully!');
-        $this->command->info('');
-        $this->command->info('📊 Summary:');
-        $this->command->info('• Users: 3 (1 manager, 1 teacher, 1 student)');
-        $this->command->info('• Basic setup ready for testing');
+        $this->command->info('✅ Multi-institution database seeding completed successfully!');
         $this->command->info('');
         $this->command->info('🔐 Test Accounts:');
-        $this->command->info('• Manager: admin@jawara.com / password');
-        $this->command->info('• Teacher: teacher@jawara.com / password');
-        $this->command->info('• Student: student@jawara.com / password');
-    }
-
-    /**
-     * Create basic user accounts for testing
-     */
-    private function createBasicUsers(): void
-    {
-        // Create manager account
-        $adminUser = User::create([
-            'name' => 'Super Admin',
-            'email' => 'admin@jawara.com',
-            'password' => bcrypt('password'),
-            'photo' => fake()->imageUrl(400, 400, 'people'),
-            'gender' => 'male',
-            'email_verified_at' => now(),
-        ]);
-        $adminUser->assignRole('manager');
-
-        // Create teacher account
-        $teacherUser = User::create([
-            'name' => 'Sample Teacher',
-            'email' => 'teacher@jawara.com',
-            'password' => bcrypt('password'),
-            'photo' => fake()->imageUrl(400, 400, 'people'),
-            'gender' => 'female',
-            'email_verified_at' => now(),
-        ]);
-        $teacherUser->assignRole('teacher');
-
-        // Create student account
-        $studentUser = User::create([
-            'name' => 'Sample Student',
-            'email' => 'student@jawara.com',
-            'password' => bcrypt('password'),
-            'photo' => fake()->imageUrl(400, 400, 'people'),
-            'gender' => 'male',
-            'email_verified_at' => now(),
-        ]);
-        $studentUser->assignRole('student');
-
-        $this->command->info('✅ Basic users created successfully!');
+        $this->command->info('• Super Admin: superadmin / superadmin123 (superadmin@kabingroup.my.id)');
+        $this->command->info('• Bimbel A PIC: pic.bimbela / password123 (bimbel-a)');
+        $this->command->info('• Bimbel A Teacher: guru.bimbela / password123 (bimbel-a)');
+        $this->command->info('• Bimbel A Student: siswa.bimbela / password123 (bimbel-a)');
+        $this->command->info('• Bimbel B PIC: pic.bimbelb / password123 (bimbel-b)');
+        $this->command->info('• Bimbel B Teacher: guru.bimbelb / password123 (bimbel-b)');
+        $this->command->info('• Bimbel B Student: siswa.bimbelb / password123 (bimbel-b)');
     }
 }

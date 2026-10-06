@@ -22,8 +22,8 @@ class ClassSubjectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'class_room_id' => 'required|integer|exists:class_rooms,id',
-            'subject_id' => 'required|integer|exists:subjects,id',
+            'class_room_id' => ['required', 'integer', \App\Rules\TenantRule::exists('class_rooms', 'id')],
+            'subject_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subjects', 'id')],
         ];
     }
 

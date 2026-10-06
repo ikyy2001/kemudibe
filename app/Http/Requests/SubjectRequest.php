@@ -25,7 +25,7 @@ class SubjectRequest extends FormRequest
         $id = $this->route('id');
 
         return [
-            'name' => 'required|string|max:255|unique:subjects,name,' . $id,
+            'name' => ['required', 'string', 'max:255', \App\Rules\TenantRule::unique('subjects', 'name', $id)],
             'code' => 'nullable|string|max:50',
             'passing_grade' => 'nullable|integer|min:0|max:100',
             'tagline' => 'required|string|max:255',
@@ -38,11 +38,11 @@ class SubjectRequest extends FormRequest
             'content' => $this->isMethod('post')
                         ? 'nullable|file|mimes:pdf|max:10240'
                         : 'sometimes|file|mimes:pdf|max:10240',
-            'topic_id' => 'nullable|integer|exists:topics,id',
+            'topic_id' => ['nullable', 'integer', \App\Rules\TenantRule::exists('topics', 'id')],
             'teacher_id' => [
                 'required',
                 'integer',
-                'exists:users,id',
+                \App\Rules\TenantRule::exists('users', 'id'),
                 function ($attribute, $value, $fail) {
                     if ($value && !User::find($value)?->hasRole('teacher')) {
                         $fail('The selected user must have teacher role.');

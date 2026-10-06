@@ -22,7 +22,7 @@ class QuestionOptionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'exam_question_id' => 'required|integer|exists:exam_questions,id',
+            'exam_question_id' => ['required', 'integer', \App\Rules\TenantRule::exists('exam_questions', 'id')],
             'is_correct' => 'required|boolean',
             'name' => 'required|string|max:500',
         ];

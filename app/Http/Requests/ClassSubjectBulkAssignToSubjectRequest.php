@@ -23,7 +23,7 @@ class ClassSubjectBulkAssignToSubjectRequest extends FormRequest
     {
         return [
             'class_room_ids' => 'required|array|min:1',
-            'class_room_ids.*' => 'integer|exists:class_rooms,id'
+            'class_room_ids.*' => ['required', 'integer', \App\Rules\TenantRule::exists('class_rooms', 'id')]
         ];
     }
 

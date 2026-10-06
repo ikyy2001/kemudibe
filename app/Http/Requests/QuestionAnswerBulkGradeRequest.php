@@ -23,7 +23,7 @@ class QuestionAnswerBulkGradeRequest extends FormRequest
     {
         return [
             'answers' => 'required|array|min:1',
-            'answers.*.id' => 'required|integer|exists:question_answers,id',
+            'answers.*.id' => ['required', 'integer', \App\Rules\TenantRule::exists('question_answers', 'id')],
             'answers.*.points_earned' => 'required|integer|min:0|max:100',
             'answers.*.has_passed' => 'required|boolean',
             'answers.*.feedback' => 'nullable|string|max:1000'

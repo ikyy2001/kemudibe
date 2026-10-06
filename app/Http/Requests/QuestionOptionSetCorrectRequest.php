@@ -22,7 +22,7 @@ class QuestionOptionSetCorrectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'option_id' => 'required|integer|exists:question_options,id'
+            'option_id' => ['required', 'integer', \App\Rules\TenantRule::exists('question_options', 'id')]
         ];
     }
 

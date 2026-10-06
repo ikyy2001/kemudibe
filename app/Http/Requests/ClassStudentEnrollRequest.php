@@ -22,7 +22,7 @@ class ClassStudentEnrollRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_id' => 'required|integer|exists:users,id',
+            'student_id' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')],
             'has_passed' => 'boolean',
             'rapport' => 'nullable|string|max:1000'
         ];

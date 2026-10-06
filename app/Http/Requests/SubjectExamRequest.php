@@ -24,7 +24,7 @@ class SubjectExamRequest extends FormRequest
         $id = $this->route('subject_exam');
 
         return [
-            'subject_id' => 'required|integer|exists:subjects,id',
+            'subject_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subjects', 'id')],
             'name' => [
                 'required',
                 'string',
@@ -38,7 +38,7 @@ class SubjectExamRequest extends FormRequest
             'duration_minutes' => 'nullable|integer|min:1|max:1440',
             'passing_grade' => 'nullable|integer|min:0|max:100',
             'category' => 'nullable|string|in:daily_quiz,mid_exam,final_exam,tryout',
-            'topic_id' => 'nullable|integer|exists:topics,id',
+            'topic_id' => ['nullable', 'integer', \App\Rules\TenantRule::exists('topics', 'id')],
             'token' => 'nullable|string|max:50',
             'token_expires_at' => 'nullable|date',
             'started_at' => 'required|date|after_or_equal:' . today()->toDateString(),

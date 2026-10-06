@@ -25,7 +25,7 @@ class TopicRequest extends FormRequest
 
         return [
             'name' => 'required|string|max:255',
-            'subject_id' => 'nullable|integer|exists:subjects,id',
+            'subject_id' => ['nullable', 'integer', \App\Rules\TenantRule::exists('subjects', 'id')],
             'about' => 'nullable|string|max:1000',
             'order' => 'nullable|integer',
             'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',

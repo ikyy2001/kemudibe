@@ -24,8 +24,8 @@ class ClassStudentRequest extends FormRequest
         $id = $this->route('class_student');
 
         return [
-            'student_id' => 'required|integer|exists:users,id',
-            'class_room_id' => 'required|integer|exists:class_rooms,id',
+            'student_id' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')],
+            'class_room_id' => ['required', 'integer', \App\Rules\TenantRule::exists('class_rooms', 'id')],
             'has_passed' => 'sometimes|boolean',
             'rapport' => 'nullable|string|max:1000',
         ];

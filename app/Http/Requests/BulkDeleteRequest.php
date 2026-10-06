@@ -85,7 +85,7 @@ class BulkDeleteRequest extends FormRequest
         
         foreach ($ids as $index => $id) {
             $validator->addRules([
-                "ids.{$index}" => "exists:{$table},id"
+                "ids.{$index}" => [\App\Rules\TenantRule::exists($table, 'id')]
             ]);
         }
     }

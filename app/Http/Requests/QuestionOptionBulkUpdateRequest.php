@@ -23,7 +23,7 @@ class QuestionOptionBulkUpdateRequest extends FormRequest
     {
         return [
             'options' => 'required|array|min:1',
-            'options.*.id' => 'required|integer|exists:question_options,id',
+            'options.*.id' => ['required', 'integer', \App\Rules\TenantRule::exists('question_options', 'id')],
             'options.*.name' => 'string|max:500',
             'options.*.is_correct' => 'boolean'
         ];

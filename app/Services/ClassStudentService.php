@@ -372,8 +372,11 @@ class ClassStudentService
             }
 
             // Delete file from storage
+            $institution = app(\App\Services\InstitutionContext::class)->get();
             if (Storage::disk('public')->exists($enrollment->rapport)) {
+                $oldSize = Storage::disk('public')->size($enrollment->rapport);
                 Storage::disk('public')->delete($enrollment->rapport);
+                $institution?->recordStorageFreed($oldSize);
             }
 
             // Clear rapport field
@@ -397,10 +400,21 @@ class ClassStudentService
      */
     private function uploadRapportPdf(UploadedFile $pdf, int $studentId, int $classRoomId): string
     {
+        $institution = app(\App\Services\InstitutionContext::class)->get();
+        $fileSize = $pdf->getSize();
+
+        if ($institution && $institution->hasReachedStorageQuota($fileSize)) {
+            throw new \Exception('Batas kuota penyimpanan lembaga telah tercapai. Hubungi Super Admin.');
+        }
+
         // Generate unique filename
         $filename = "student_{$studentId}_classroom_{$classRoomId}_" . time() . '.pdf';
+        $dir = $institution ? "institutions/{$institution->id}/rapports" : "rapports";
 
-        // Store in rapports directory
-        return $pdf->storeAs('rapports', $filename, 'public');
+        // Store in tenant rapports directory
+        $path = $pdf->storeAs($dir, $filename, 'public');
+        $institution?->recordStorageAdded($fileSize);
+
+        return $path;
     }
 }

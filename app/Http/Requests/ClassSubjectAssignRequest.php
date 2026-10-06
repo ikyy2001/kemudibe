@@ -22,7 +22,7 @@ class ClassSubjectAssignRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subject_id' => 'required|integer|exists:subjects,id'
+            'subject_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subjects', 'id')]
         ];
     }
 

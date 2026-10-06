@@ -204,6 +204,11 @@ class ExamProctorController extends Controller
                 ]
             ]);
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data ujian tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -219,15 +224,21 @@ class ExamProctorController extends Controller
     public function forceSubmit(Request $request, int $id, int $studentId)
     {
         try {
+            $exam = SubjectExam::findOrFail($id);
             $reason = $request->input('reason', 'Dikumpulkan secara paksa oleh Pengawas Ujian.');
             
-            $result = $this->studentExamService->completeExam($studentId, $id, $reason);
+            $result = $this->studentExamService->completeExam($studentId, $exam->id, $reason);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Ujian siswa berhasil dikumpulkan secara paksa.',
                 'data' => $result
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data ujian tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -242,7 +253,9 @@ class ExamProctorController extends Controller
     public function resetSession(Request $request, int $id, int $studentId)
     {
         try {
-            $attempt = ExamAttempt::where('subject_exam_id', $id)
+            $exam = SubjectExam::findOrFail($id);
+
+            $attempt = ExamAttempt::where('subject_exam_id', $exam->id)
                 ->where('student_id', $studentId)
                 ->first();
 
@@ -283,6 +296,11 @@ class ExamProctorController extends Controller
                 'message' => 'Sesi perangkat siswa berhasil di-reset. Siswa kini dapat masuk kembali.',
                 'data' => $attempt
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data ujian tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

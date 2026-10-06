@@ -91,11 +91,12 @@ class StudentExamController extends Controller
                 'message' => 'Exam not found'
             ], 404);
         } catch (\Exception $e) {
+            $status = ($e->getMessage() === 'You do not have access to this exam') ? 403 : 400;
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error' => config('app.debug') ? $e->getMessage() : null
-            ], 400);
+            ], $status);
         }
     }
     

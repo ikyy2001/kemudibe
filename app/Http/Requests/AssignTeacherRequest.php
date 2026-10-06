@@ -22,7 +22,7 @@ class AssignTeacherRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'teacher_id' => 'required|integer|exists:users,id'
+            'teacher_id' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')]
         ];
     }
 

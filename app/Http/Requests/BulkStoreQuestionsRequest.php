@@ -23,7 +23,7 @@ class BulkStoreQuestionsRequest extends FormRequest
     {
         return [
             'questions' => 'required|array|min:1',
-            'questions.*.subject_exam_id' => 'required|integer|exists:subject_exams,id',
+            'questions.*.subject_exam_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subject_exams', 'id')],
             'questions.*.name' => 'required|string|max:65535',
             'questions.*.timer' => 'nullable|integer|min:0|max:3600',
             'questions.*.type' => 'required|string|in:multiple_choice,essay',

@@ -23,7 +23,7 @@ class ClassStudentBulkEnrollRequest extends FormRequest
     {
         return [
             'student_ids' => 'required|array|min:1',
-            'student_ids.*' => 'integer|exists:users,id',
+            'student_ids.*' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')],
             'has_passed' => 'sometimes|boolean',
             'rapport' => 'nullable|string|max:1000'
         ];

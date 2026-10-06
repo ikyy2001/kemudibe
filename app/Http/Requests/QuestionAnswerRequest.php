@@ -22,8 +22,8 @@ class QuestionAnswerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'exam_question_id' => 'required|integer|exists:exam_questions,id',
-            'student_id' => 'required|integer|exists:users,id',
+            'exam_question_id' => ['required', 'integer', \App\Rules\TenantRule::exists('exam_questions', 'id')],
+            'student_id' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')],
             'answer_text' => 'required|string|max:2000',
             'has_passed' => 'sometimes|boolean',
             'points_earned' => 'nullable|integer|min:0|max:100',

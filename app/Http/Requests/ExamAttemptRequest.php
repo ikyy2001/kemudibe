@@ -22,8 +22,8 @@ class ExamAttemptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'student_id' => 'required|integer|exists:users,id',
-            'subject_exam_id' => 'required|integer|exists:subject_exams,id',
+            'student_id' => ['required', 'integer', \App\Rules\TenantRule::exists('users', 'id')],
+            'subject_exam_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subject_exams', 'id')],
             'is_completed' => 'sometimes|boolean',
             'total_questions' => 'required|integer|min:1',
             'answered_questions' => 'required|integer|min:0',

@@ -38,8 +38,8 @@ class LessonController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'subject_id' => 'required|exists:subjects,id',
-            'topic_id' => 'nullable|exists:topics,id',
+            'subject_id' => ['required', \App\Rules\TenantRule::exists('subjects', 'id')],
+            'topic_id' => ['nullable', \App\Rules\TenantRule::exists('topics', 'id')],
             'title' => 'required|string|max:255',
             'content_type' => 'required|in:text,file,drive,video',
             'text_content' => 'nullable|string',
@@ -49,9 +49,24 @@ class LessonController extends Controller
             'order' => 'nullable|integer',
         ]);
 
+        $institution = app(\App\Services\InstitutionContext::class)->get();
+
         if ($request->hasFile('attachment')) {
-            $path = $request->file('attachment')->store('lessons', 'public');
+            $file = $request->file('attachment');
+            $fileSize = $file->getSize();
+
+            if ($institution && $institution->hasReachedStorageQuota($fileSize)) {
+                return response()->json([
+                    'message' => 'Batas kuota penyimpanan lembaga telah tercapai. Hubungi Super Admin.',
+                    'code' => 'STORAGE_QUOTA_EXCEEDED'
+                ], 422);
+            }
+
+            $storageDir = $institution ? "institutions/{$institution->id}/lessons" : "lessons";
+            $path = $file->store($storageDir, 'public');
             $validated['attachment'] = $path;
+
+            $institution?->recordStorageAdded($fileSize);
         }
 
         $lesson = Lesson::create($validated);
@@ -98,8 +113,8 @@ class LessonController extends Controller
         }
 
         $validated = $request->validate([
-            'subject_id' => 'sometimes|exists:subjects,id',
-            'topic_id' => 'nullable|exists:topics,id',
+            'subject_id' => ['sometimes', \App\Rules\TenantRule::exists('subjects', 'id')],
+            'topic_id' => ['nullable', \App\Rules\TenantRule::exists('topics', 'id')],
             'title' => 'sometimes|string|max:255',
             'content_type' => 'sometimes|in:text,file,drive,video',
             'text_content' => 'nullable|string',
@@ -109,14 +124,32 @@ class LessonController extends Controller
             'order' => 'nullable|integer',
         ]);
 
+        $institution = app(\App\Services\InstitutionContext::class)->get();
+
         if ($request->hasFile('attachment')) {
-            // Delete old attachment if exists
+            $file = $request->file('attachment');
+            $fileSize = $file->getSize();
+
+            if ($institution && $institution->hasReachedStorageQuota($fileSize)) {
+                return response()->json([
+                    'message' => 'Batas kuota penyimpanan lembaga telah tercapai. Hubungi Super Admin.',
+                    'code' => 'STORAGE_QUOTA_EXCEEDED'
+                ], 422);
+            }
+
+            // Delete old attachment if exists & track storage
             $rawAttachment = $lesson->getRawOriginal('attachment');
             if ($rawAttachment && Storage::disk('public')->exists($rawAttachment)) {
+                $oldSize = Storage::disk('public')->size($rawAttachment);
                 Storage::disk('public')->delete($rawAttachment);
+                $institution?->recordStorageFreed($oldSize);
             }
-            $path = $request->file('attachment')->store('lessons', 'public');
+
+            $storageDir = $institution ? "institutions/{$institution->id}/lessons" : "lessons";
+            $path = $file->store($storageDir, 'public');
             $validated['attachment'] = $path;
+
+            $institution?->recordStorageAdded($fileSize);
         }
 
         $lesson->update($validated);
@@ -142,9 +175,12 @@ class LessonController extends Controller
             ], 404);
         }
 
+        $institution = app(\App\Services\InstitutionContext::class)->get();
         $rawAttachment = $lesson->getRawOriginal('attachment');
         if ($rawAttachment && Storage::disk('public')->exists($rawAttachment)) {
+            $oldSize = Storage::disk('public')->size($rawAttachment);
             Storage::disk('public')->delete($rawAttachment);
+            $institution?->recordStorageFreed($oldSize);
         }
 
         $lesson->delete();

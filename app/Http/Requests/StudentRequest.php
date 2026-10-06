@@ -25,13 +25,21 @@ class StudentRequest extends FormRequest
 
         $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,' . $id,
+            'username' => ['nullable', 'string', 'max:60', \App\Rules\TenantRule::unique('users', 'username', $id)],
+            'email' => ['required', 'email', 'max:255', \App\Rules\TenantRule::unique('users', 'email', $id)],
             'gender' => 'required|in:male,female',
             'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
-        // Password is required only for creating new student
+        // Quota check & password required for new student
         if ($this->isMethod('post')) {
+            $context = app(\App\Services\InstitutionContext::class);
+            $institution = $context->get();
+            if ($institution && !$institution->canAddStudents(1)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'quota' => ["Batas kuota siswa untuk lembaga ini telah tercapai ({$institution->max_students} siswa). Hubungi Super Admin untuk menambah kuota."]
+                ]);
+            }
             $rules['password'] = 'required|string|min:8|confirmed';
         } else {
             $rules['password'] = 'nullable|string|min:8|confirmed';

@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Traits\BelongsToInstitution;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClassSubject extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToInstitution;
+
     protected $fillable = [
+        'institution_id',
         'class_room_id',
         'subject_id',
     ];

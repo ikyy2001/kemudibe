@@ -25,7 +25,8 @@ class TeacherRequest extends FormRequest
 
         $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,' . $id,
+            'username' => ['nullable', 'string', 'max:60', \App\Rules\TenantRule::unique('users', 'username', $id)],
+            'email' => ['required', 'email', 'max:255', \App\Rules\TenantRule::unique('users', 'email', $id)],
             'gender' => 'required|in:male,female',
             'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];

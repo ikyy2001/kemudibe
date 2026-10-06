@@ -42,7 +42,7 @@ class ProfileController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email,' . $user->id,
+                'email' => ['required', 'email', \App\Rules\TenantRule::unique('users', 'email', $user->id, $user->institution_id)],
                 'gender' => 'nullable|in:male,female',
                 'photo' => 'nullable',
             ]);
@@ -59,7 +59,8 @@ class ProfileController extends Controller
 
             if ($request->hasFile('photo')) {
                 $file = $request->file('photo');
-                $path = $file->store('profiles', 'public');
+                $targetDir = $user->institution_id ? "institutions/{$user->institution_id}/profiles" : "profiles";
+                $path = $file->store($targetDir, 'public');
                 $data['photo'] = $path;
             } elseif ($request->filled('photo')) {
                 $data['photo'] = $request->input('photo');

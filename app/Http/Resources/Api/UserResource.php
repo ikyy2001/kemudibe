@@ -16,10 +16,21 @@ class UserResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'institution_id' => $this->institution_id,
             'name' => $this->name,
+            'username' => $this->username,
             'email' => $this->email,
             'photo' => $this->photo,
             'gender' => $this->gender,
+            'must_change_password' => (bool) $this->must_change_password,
+            'last_login_at' => $this->last_login_at?->toISOString(),
+            'institution' => $this->institution ? [
+                'id' => $this->institution->id,
+                'slug' => $this->institution->slug,
+                'name' => $this->institution->name,
+                'status' => $this->institution->status,
+                'is_read_only' => $this->institution->isReadOnly(),
+            ] : null,
             'roles' => $this->when($this->relationLoaded('roles'), function () {
                 return $this->roles->pluck('name');
             }),

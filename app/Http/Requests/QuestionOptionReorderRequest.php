@@ -23,7 +23,7 @@ class QuestionOptionReorderRequest extends FormRequest
     {
         return [
             'order' => 'required|array|min:1',
-            'order.*.id' => 'required|integer|exists:question_options,id'
+            'order.*.id' => ['required', 'integer', \App\Rules\TenantRule::exists('question_options', 'id')]
         ];
     }
 

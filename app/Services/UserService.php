@@ -88,6 +88,8 @@ class UserService
             // Kolom kelas/rombel dideteksi lebih dulu agar 'Nama/ID Kelas' tidak menimpa 'Nama Lengkap'
             if (str_contains($clean, 'kelas') || str_contains($clean, 'class') || str_contains($clean, 'rombel')) {
                 $headerMap['classroom'] = $col;
+            } elseif (str_contains($clean, 'username') || str_contains($clean, 'nis') || str_contains($clean, 'nip') || (str_contains($clean, 'user') && !str_contains($clean, 'nama'))) {
+                $headerMap['username'] = $col;
             } elseif (str_contains($clean, 'email') || str_contains($clean, 'surel') || str_contains($clean, 'mail')) {
                 $headerMap['email'] = $col;
             } elseif (str_contains($clean, 'pass') || str_contains($clean, 'sandi')) {
@@ -104,13 +106,22 @@ class UserService
             }
         }
 
-        // Default positional fallbacks if headers weren't named standardly
+        // Positional fallbacks based on column count
         if (!isset($headerMap['name'])) $headerMap['name'] = 'A';
-        if (!isset($headerMap['email'])) $headerMap['email'] = 'B';
-        if (!isset($headerMap['password'])) $headerMap['password'] = 'C';
-        if (!isset($headerMap['gender'])) $headerMap['gender'] = 'D';
-        if (!isset($headerMap['role'])) $headerMap['role'] = 'E';
-        if (!isset($headerMap['classroom'])) $headerMap['classroom'] = 'F';
+        if (!isset($headerMap['username']) && count($headerRow) >= 7) {
+            $headerMap['username'] = 'B';
+            if (!isset($headerMap['email'])) $headerMap['email'] = 'C';
+            if (!isset($headerMap['password'])) $headerMap['password'] = 'D';
+            if (!isset($headerMap['gender'])) $headerMap['gender'] = 'E';
+            if (!isset($headerMap['role'])) $headerMap['role'] = 'F';
+            if (!isset($headerMap['classroom'])) $headerMap['classroom'] = 'G';
+        } else {
+            if (!isset($headerMap['email'])) $headerMap['email'] = 'B';
+            if (!isset($headerMap['password'])) $headerMap['password'] = 'C';
+            if (!isset($headerMap['gender'])) $headerMap['gender'] = 'D';
+            if (!isset($headerMap['role'])) $headerMap['role'] = 'E';
+            if (!isset($headerMap['classroom'])) $headerMap['classroom'] = 'F';
+        }
 
         $parsed = [];
         $rowNumber = 1;
@@ -118,10 +129,11 @@ class UserService
         foreach ($rawRows as $row) {
             $rowNumber++;
             $name = isset($headerMap['name'], $row[$headerMap['name']]) ? trim((string)$row[$headerMap['name']]) : '';
+            $username = isset($headerMap['username'], $row[$headerMap['username']]) ? trim((string)$row[$headerMap['username']]) : '';
             $email = isset($headerMap['email'], $row[$headerMap['email']]) ? trim((string)$row[$headerMap['email']]) : '';
 
             // Skip completely empty rows
-            if (empty($name) && empty($email)) {
+            if (empty($name) && empty($email) && empty($username)) {
                 continue;
             }
 
@@ -133,6 +145,7 @@ class UserService
             $parsed[] = [
                 'row_number' => $rowNumber,
                 'name' => $name,
+                'username' => $username ?: null,
                 'email' => $email,
                 'password' => $password ?: 'password123',
                 'gender' => $gender,
@@ -151,7 +164,7 @@ class UserService
     {
         $imported = [];
         $errors = [];
-        $seenEmails = [];
+        $seenUsernames = [];
 
         // Preload classrooms for quick ID/Name matching
         $classrooms = \App\Models\ClassRoom::all();
@@ -159,6 +172,7 @@ class UserService
         foreach ($accountRows as $idx => $row) {
             $rowNum = $row['row_number'] ?? ($idx + 2);
             $name = trim((string)($row['name'] ?? ''));
+            $rawUsername = strtolower(trim((string)($row['username'] ?? '')));
             $email = strtolower(trim((string)($row['email'] ?? '')));
             $password = trim((string)($row['password'] ?? '')) ?: $defaultPassword;
             $rawGender = strtolower(trim((string)($row['gender'] ?? '')));
@@ -169,43 +183,90 @@ class UserService
             if (empty($name)) {
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email ?: '-',
+                    'email' => $email ?: ($rawUsername ?: '-'),
                     'reason' => 'Nama lengkap wajib diisi.'
                 ];
                 continue;
             }
 
-            // 2. Validation: Email
-            if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            // Derive username if not explicitly set
+            $username = $rawUsername;
+            if (empty($username)) {
+                if (!empty($email)) {
+                    $username = strtolower(explode('@', $email)[0]);
+                } else {
+                    $errors[] = [
+                        'row' => $rowNum,
+                        'email' => '-',
+                        'reason' => 'Username atau Email harus diisi.'
+                    ];
+                    continue;
+                }
+            }
+
+            // 2. Validation: Username format
+            if (!preg_match('/^[a-z0-9._-]+$/', $username)) {
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email ?: '-',
-                    'reason' => 'Format email tidak valid.'
+                    'email' => $username,
+                    'reason' => 'Format username tidak valid (hanya huruf kecil, angka, titik, strip, atau underscore).'
                 ];
                 continue;
             }
 
-            // 3. Validation: Duplicate within file
-            if (in_array($email, $seenEmails)) {
+            // 3. Validation: Username duplicate in file
+            if (in_array($username, $seenUsernames)) {
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email,
-                    'reason' => 'Email duplikat terdeteksi di dalam file yang sama.'
+                    'email' => $username,
+                    'reason' => "Username/NIS/NIP '{$username}' duplikat di dalam file yang sama."
                 ];
                 continue;
             }
 
-            // 4. Validation: Duplicate in database
-            if (\App\Models\User::where('email', $email)->exists()) {
+            // 4. Validation: Username duplicate in database (within tenant)
+            if (\App\Models\User::where('username', $username)->exists()) {
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email,
-                    'reason' => 'Email sudah terdaftar di sistem.'
+                    'email' => $username,
+                    'reason' => "Username/NIS/NIP '{$username}' sudah terdaftar di sistem."
                 ];
                 continue;
             }
 
-            // 5. Normalization: Gender
+            // 5. Validation: Email (if provided)
+            if (!empty($email)) {
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $errors[] = [
+                        'row' => $rowNum,
+                        'email' => $email,
+                        'reason' => 'Format email tidak valid.'
+                    ];
+                    continue;
+                }
+
+                if (in_array($email, $seenEmails)) {
+                    $errors[] = [
+                        'row' => $rowNum,
+                        'email' => $email,
+                        'reason' => 'Email duplikat terdeteksi di dalam file yang sama.'
+                    ];
+                    continue;
+                }
+
+                if (\App\Models\User::where('email', $email)->exists()) {
+                    $errors[] = [
+                        'row' => $rowNum,
+                        'email' => $email,
+                        'reason' => 'Email sudah terdaftar di sistem.'
+                    ];
+                    continue;
+                }
+            } else {
+                $email = null;
+            }
+
+            // 6. Normalization: Gender
             $gender = 'male';
             if (in_array($rawGender, ['female', 'f', 'p', 'perempuan', 'wanita', 'akhwat'])) {
                 $gender = 'female';
@@ -213,7 +274,7 @@ class UserService
                 $gender = 'male';
             }
 
-            // 6. Normalization: Role
+            // 7. Normalization: Role
             $role = 'student';
             if (in_array($rawRole, ['teacher', 'guru', 'pengajar', 'ustadz', 'ustadzah'])) {
                 $role = 'teacher';
@@ -221,28 +282,15 @@ class UserService
                 $role = 'pic';
             }
 
-            // 7. Check student quota
+            // 8. Check student quota
             $institution = app(\App\Services\InstitutionContext::class)->get();
             if ($role === 'student' && $institution && !$institution->canAddStudents(1)) {
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email,
+                    'email' => $username ?: ($email ?: '-'),
                     'reason' => "Batas kuota siswa untuk lembaga ini telah tercapai ({$institution->max_students} siswa)."
                 ];
                 continue;
-            }
-
-            // Derive username if not present
-            $username = isset($row['username']) && !empty($row['username'])
-                ? strtolower(trim((string)$row['username']))
-                : strtolower(explode('@', $email)[0]);
-
-            // Ensure username uniqueness within tenant
-            $originalUsername = $username;
-            $counter = 1;
-            while (\App\Models\User::where('username', $username)->exists()) {
-                $username = $originalUsername . $counter;
-                $counter++;
             }
 
             // Create user safely in transaction
@@ -282,7 +330,10 @@ class UserService
 
                 \Illuminate\Support\Facades\DB::commit();
 
-                $seenEmails[] = $email;
+                $seenUsernames[] = $username;
+                if ($email) {
+                    $seenEmails[] = $email;
+                }
                 $imported[] = [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -296,7 +347,7 @@ class UserService
                 \Illuminate\Support\Facades\DB::rollBack();
                 $errors[] = [
                     'row' => $rowNum,
-                    'email' => $email,
+                    'email' => $username ?: ($email ?: '-'),
                     'reason' => 'Gagal membuat user: ' . $e->getMessage()
                 ];
             }
@@ -323,11 +374,12 @@ class UserService
         // Headers
         $headers = [
             'A1' => 'Nama Lengkap*',
-            'B1' => 'Email*',
-            'C1' => 'Password (Default)',
-            'D1' => 'Jenis Kelamin* (L/P)',
-            'E1' => 'Role (student/teacher)',
-            'F1' => 'Nama/ID Kelas (Opsional)',
+            'B1' => 'Username / NIS / NIP*',
+            'C1' => 'Email (Opsional)',
+            'D1' => 'Password Awal (Opsional)',
+            'E1' => 'Jenis Kelamin* (L/P)',
+            'F1' => 'Role (student/teacher)',
+            'G1' => 'Nama/ID Kelas (Opsional)',
         ];
 
         foreach ($headers as $cell => $text) {
@@ -351,14 +403,14 @@ class UserService
             ],
         ];
 
-        $sheet->getStyle('A1:F1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
         $sheet->getRowDimension(1)->setRowHeight(28);
 
         // Sample Data Rows
         $sampleData = [
-            ['Ahmad Fauzi', 'ahmad.fauzi@sekolah.sch.id', 'password123', 'L', 'student', 'Kelas 10-A'],
-            ['Siti Aisyah', 'siti.aisyah@sekolah.sch.id', 'password123', 'P', 'student', 'Kelas 10-A'],
-            ['Bambang Pamungkas', 'bambang.guru@sekolah.sch.id', 'password123', 'L', 'teacher', ''],
+            ['Ahmad Fauzi', 'ahmadfauzi', 'ahmad.fauzi@sekolah.sch.id', 'password123', 'L', 'student', 'Kelas 10-A'],
+            ['Siti Aisyah', '20261002', '', 'password123', 'P', 'student', 'Kelas 10-A'],
+            ['Bambang Pamungkas', '198501012010011001', 'bambang.guru@sekolah.sch.id', 'password123', 'L', 'teacher', ''],
         ];
 
         $rowIdx = 2;
@@ -369,11 +421,12 @@ class UserService
             $sheet->setCellValue('D' . $rowIdx, $row[3]);
             $sheet->setCellValue('E' . $rowIdx, $row[4]);
             $sheet->setCellValue('F' . $rowIdx, $row[5]);
+            $sheet->setCellValue('G' . $rowIdx, $row[6]);
             $rowIdx++;
         }
 
         // Auto width
-        foreach (range('A', 'F') as $col) {
+        foreach (range('A', 'G') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 

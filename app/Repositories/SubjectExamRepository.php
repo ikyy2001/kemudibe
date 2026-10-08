@@ -71,7 +71,12 @@ class SubjectExamRepository
                 'examQuestions:id,subject_exam_id,name,timer,type,points',
                 'examQuestions.questionOptions:id,exam_question_id,name,is_correct',
                 'examAttempts' => function($query) {
-                    $query->with('student:id,name,email,photo')->orderBy('is_completed', 'desc')->orderBy('created_at', 'desc');
+                    $query->with([
+                        'student:id,name,email,photo',
+                        'violations' => function($q) {
+                            $q->orderBy('occurred_at', 'desc');
+                        }
+                    ])->orderBy('is_completed', 'desc')->orderBy('created_at', 'desc');
                 }
             ])
             ->withCount(['examQuestions', 'examAttempts'])

@@ -271,8 +271,11 @@ Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->gro
     // PIC/Manager & Teacher routes
     Route::middleware('role:pic|manager|teacher')->group(function () {
         Route::get('exams/{id}/live-monitor', [ExamProctorController::class, 'getLiveStatus']);
+        Route::get('subject-exams/{id}/live-monitor', [ExamProctorController::class, 'getLiveStatus']);
         Route::post('exams/{id}/students/{studentId}/force-submit', [ExamProctorController::class, 'forceSubmit']);
+        Route::post('subject-exams/{id}/students/{studentId}/force-submit', [ExamProctorController::class, 'forceSubmit']);
         Route::post('exams/{id}/students/{studentId}/reset-session', [ExamProctorController::class, 'resetSession']);
+        Route::post('subject-exams/{id}/students/{studentId}/reset-session', [ExamProctorController::class, 'resetSession']);
         Route::post('class-rooms/{classroomId}/activities', [ClassroomActivityController::class, 'store']);
         Route::put('class-rooms/{classroomId}/activities/{id}', [ClassroomActivityController::class, 'update']);
         Route::delete('class-rooms/{classroomId}/activities/{id}', [ClassroomActivityController::class, 'destroy']);

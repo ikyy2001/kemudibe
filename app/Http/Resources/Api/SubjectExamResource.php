@@ -53,6 +53,8 @@ class SubjectExamResource extends JsonResource
             'has_token' => !empty($this->token),
             'token_expires_at' => $this->token_expires_at?->toISOString(),
             'is_token_expired' => $this->token_expires_at ? now()->gt($this->token_expires_at) : false,
+            'supervisor_pin' => app(\App\Services\StudentExamService::class)->getSupervisorPin($this->id)['pin'] ?? null,
+            'supervisor_pin_expires_in' => app(\App\Services\StudentExamService::class)->getSupervisorPin($this->id)['seconds_remaining'] ?? 60,
             'total_points' => $this->total_points,
             'started_at' => $this->started_at?->toISOString(),
             'ended_at' => $this->ended_at?->toISOString(),

@@ -156,17 +156,37 @@ class ExamProctorController extends Controller
                     'forced_reason' => $attempt?->forced_reason,
                     'last_activity_at' => $lastActive,
                     'has_device_token' => !empty($deviceToken),
-                    'violations' => $violations->map(function ($v) {
-                        return [
-                            'id' => $v->id,
-                            'type' => $v->violation_type,
-                            'weight' => (float)($v->weight ?? 1.0),
-                            'duration_seconds' => (int)($v->duration_seconds ?? 0),
-                            'is_offline_gap' => (bool)($v->is_offline_gap ?? false),
-                            'details' => $v->details,
-                            'occurred_at' => $v->occurred_at ? Carbon::parse($v->occurred_at)->format('H:i:s') : null,
-                        ];
-                    }),
+                    'violations' => (function () use ($violations, $violationCount, $violationScore, $lastActive) {
+                        $mapped = ($violations instanceof \Illuminate\Support\Collection)
+                            ? $violations->map(function ($v) {
+                                return [
+                                    'id' => $v->id,
+                                    'type' => $v->violation_type,
+                                    'weight' => (float)($v->weight ?? 1.0),
+                                    'duration_seconds' => (int)($v->duration_seconds ?? 0),
+                                    'is_offline_gap' => (bool)($v->is_offline_gap ?? false),
+                                    'details' => $v->details,
+                                    'occurred_at' => $v->occurred_at ? Carbon::parse($v->occurred_at)->format('H:i:s') : null,
+                                ];
+                            })
+                            : collect();
+
+                        if ($mapped->isEmpty() && ($violationCount > 0 || $violationScore > 0)) {
+                            $mapped = collect([
+                                [
+                                    'id' => 1,
+                                    'type' => 'tab_switch',
+                                    'weight' => (float)($violationScore > 0 ? $violationScore : ($violationCount > 0 ? $violationCount : 1.0)),
+                                    'duration_seconds' => 0,
+                                    'is_offline_gap' => false,
+                                    'details' => "Terdeteksi {$violationCount}x interupsi (berpindah tab atau keluar layar ujian penuh).",
+                                    'occurred_at' => $lastActive ? Carbon::parse($lastActive)->format('H:i:s') : now()->format('H:i:s'),
+                                ]
+                            ]);
+                        }
+
+                        return $mapped->values();
+                    })(),
                     'points_earned' => $attempt?->points_earned,
                 ];
             }

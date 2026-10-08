@@ -85,21 +85,32 @@ class UserService
             if (!$val) continue;
             $clean = strtolower(trim((string)$val));
 
-            // Kolom kelas/rombel dideteksi lebih dulu agar 'Nama/ID Kelas' tidak menimpa 'Nama Lengkap'
-            if (str_contains($clean, 'kelas') || str_contains($clean, 'class') || str_contains($clean, 'rombel')) {
-                $headerMap['classroom'] = $col;
-            } elseif (str_contains($clean, 'username') || str_contains($clean, 'nis') || str_contains($clean, 'nip') || (str_contains($clean, 'user') && !str_contains($clean, 'nama'))) {
-                $headerMap['username'] = $col;
-            } elseif (str_contains($clean, 'email') || str_contains($clean, 'surel') || str_contains($clean, 'mail')) {
-                $headerMap['email'] = $col;
-            } elseif (str_contains($clean, 'pass') || str_contains($clean, 'sandi')) {
-                $headerMap['password'] = $col;
-            } elseif (str_contains($clean, 'gender') || str_contains($clean, 'kelamin') || $clean === 'jk' || str_contains($clean, 'sex')) {
+            // 1. Gender / Kelamin dideteksi lebih awal agar kata 'jenis' tidak tertangkap oleh 'nis'
+            if (str_contains($clean, 'gender') || str_contains($clean, 'kelamin') || preg_match('/\bjk\b/', $clean) || str_contains($clean, 'sex')) {
                 $headerMap['gender'] = $col;
-            } elseif (str_contains($clean, 'role') || str_contains($clean, 'peran') || str_contains($clean, 'jabatan')) {
+            } 
+            // 2. Kolom kelas/rombel dideteksi agar 'Nama/ID Kelas' tidak tertangkap oleh 'Nama Lengkap' atau 'id'
+            elseif (str_contains($clean, 'kelas') || str_contains($clean, 'class') || str_contains($clean, 'rombel')) {
+                $headerMap['classroom'] = $col;
+            } 
+            // 3. Email
+            elseif (str_contains($clean, 'email') || str_contains($clean, 'surel') || str_contains($clean, 'mail')) {
+                $headerMap['email'] = $col;
+            } 
+            // 4. Password
+            elseif (str_contains($clean, 'pass') || str_contains($clean, 'sandi')) {
+                $headerMap['password'] = $col;
+            } 
+            // 5. Role
+            elseif (str_contains($clean, 'role') || str_contains($clean, 'peran') || str_contains($clean, 'jabatan')) {
                 $headerMap['role'] = $col;
-            } elseif (str_contains($clean, 'nama') || str_contains($clean, 'name')) {
-                // Kolom nama siswa/guru: prioritaskan 'nama lengkap' atau kolom pertama yang belum terisi
+            } 
+            // 6. Username / NIS / NIP
+            elseif (str_contains($clean, 'username') || preg_match('/\bnis\b/', $clean) || preg_match('/\bnip\b/', $clean) || (preg_match('/\buser\b/', $clean) && !str_contains($clean, 'nama')) || preg_match('/\bid\b/', $clean)) {
+                $headerMap['username'] = $col;
+            } 
+            // 7. Nama Lengkap
+            elseif (str_contains($clean, 'nama') || str_contains($clean, 'name')) {
                 if (!isset($headerMap['name']) || str_contains($clean, 'lengkap') || str_contains($clean, 'full')) {
                     $headerMap['name'] = $col;
                 }
@@ -108,19 +119,19 @@ class UserService
 
         // Positional fallbacks based on column count
         if (!isset($headerMap['name'])) $headerMap['name'] = 'A';
-        if (!isset($headerMap['username']) && count($headerRow) >= 7) {
+        if (!isset($headerMap['username']) && count($headerRow) >= 6) {
             $headerMap['username'] = 'B';
             if (!isset($headerMap['email'])) $headerMap['email'] = 'C';
             if (!isset($headerMap['password'])) $headerMap['password'] = 'D';
             if (!isset($headerMap['gender'])) $headerMap['gender'] = 'E';
             if (!isset($headerMap['role'])) $headerMap['role'] = 'F';
-            if (!isset($headerMap['classroom'])) $headerMap['classroom'] = 'G';
+            if (!isset($headerMap['classroom']) && count($headerRow) >= 7) $headerMap['classroom'] = 'G';
         } else {
             if (!isset($headerMap['email'])) $headerMap['email'] = 'B';
             if (!isset($headerMap['password'])) $headerMap['password'] = 'C';
             if (!isset($headerMap['gender'])) $headerMap['gender'] = 'D';
             if (!isset($headerMap['role'])) $headerMap['role'] = 'E';
-            if (!isset($headerMap['classroom'])) $headerMap['classroom'] = 'F';
+            if (!isset($headerMap['classroom']) && count($headerRow) >= 6) $headerMap['classroom'] = 'F';
         }
 
         $parsed = [];

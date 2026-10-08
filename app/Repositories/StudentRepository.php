@@ -163,6 +163,7 @@ class StudentRepository
     {
         $queryBuilder = User::select($fields)
             ->role('student')
+            ->distinct()
             ->withCount(['classStudents', 'questionAnswers', 'examAttempts'])
             ->latest();
 
@@ -195,6 +196,7 @@ class StudentRepository
     {
         $queryBuilder = User::select($fields)
             ->role('student')
+            ->distinct()
             ->withCount(['classStudents', 'questionAnswers', 'examAttempts'])
             ->latest()
             ->limit($limit);

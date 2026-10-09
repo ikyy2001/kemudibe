@@ -269,6 +269,8 @@ class ExamProctorController extends Controller
 
     /**
      * Reset student session / allow re-login after device conflict or disconnect
+     * Also allows teachers/PICs to grant retake or resume exam with violation count reset to 0
+     * and preserving all historic violation audit logs.
      */
     public function resetSession(Request $request, int $id, int $studentId)
     {
@@ -286,9 +288,15 @@ class ExamProctorController extends Controller
                 ], 404);
             }
 
-            // Clear device token and reset locked status if force-completed by mistake
-            $resetCompletion = $request->boolean('reopen_exam', false);
-            
+            $supervisor = $request->user();
+            $supervisorName = $supervisor ? $supervisor->name : 'Pengawas';
+            $supervisorRole = $supervisor && $supervisor->roles->first() ? strtoupper($supervisor->roles->first()->name) : 'PENGAWAS';
+
+            $reopenExam = $request->boolean('reopen_exam', false);
+            $retakeFromScratch = $request->boolean('retake_from_scratch', false);
+            $resetViolations = $request->boolean('reset_violations', true);
+            $reason = (string)$request->input('reason', '');
+
             $updateData = [
                 'current_exam_device_token' => null,
                 'is_frozen' => false,
@@ -296,25 +304,53 @@ class ExamProctorController extends Controller
                 'last_activity_at' => now(),
             ];
 
-            if ($resetCompletion) {
+            if ($reopenExam || $retakeFromScratch) {
                 $updateData['is_completed'] = false;
                 $updateData['completed_at'] = null;
                 $updateData['forced_reason'] = null;
-                // Give back 1 violation leeway if limit reached
-                if ($attempt->violation_count >= $attempt->max_violations) {
-                    $updateData['violation_count'] = max(0, $attempt->max_violations - 1);
-                }
-                if (($attempt->violation_score ?? 0) >= ($attempt->max_violation_score ?? 3.0)) {
-                    $updateData['violation_score'] = max(0.0, ($attempt->max_violation_score ?? 3.0) - 1.0);
-                }
+            }
+
+            if ($resetViolations || $reopenExam || $retakeFromScratch) {
+                $updateData['violation_count'] = 0;
+                $updateData['violation_score'] = 0.0;
+            }
+
+            if ($retakeFromScratch) {
+                // Delete previous answers so student starts completely fresh
+                \App\Models\QuestionAnswer::where('exam_attempt_id', $attempt->id)->delete();
+                $updateData['answered_questions'] = 0;
+                $updateData['points_earned'] = 0;
+                $updateData['score_percentage'] = 0.0;
+                $updateData['has_passed'] = false;
+                $modeText = 'Kerjakan Ulang dari Awal (Semua jawaban di-reset)';
+            } elseif ($reopenExam) {
+                $modeText = 'Lanjutkan Ujian (Jawaban tersimpan dipertahankan)';
+            } else {
+                $modeText = 'Reset Sesi Perangkat';
             }
 
             $attempt->update($updateData);
 
+            // AUDIT LOG: Preserve all past logs and record a supervisor audit trail entry
+            $detailsLog = "Sesi ujian di-reset oleh {$supervisorName} ({$supervisorRole}). Opsi: {$modeText}. Pelanggaran aktif diatur ke 0 agar siswa dapat mengikuti ujian.";
+            if (!empty($reason)) {
+                $detailsLog .= " Catatan pengawas: {$reason}";
+            }
+
+            \App\Models\ExamViolation::create([
+                'exam_attempt_id' => $attempt->id,
+                'violation_type' => 'supervisor_reset',
+                'weight' => 0.0,
+                'duration_seconds' => 0,
+                'is_offline_gap' => false,
+                'details' => $detailsLog,
+                'occurred_at' => now(),
+            ]);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Sesi perangkat siswa berhasil di-reset. Siswa kini dapat masuk kembali.',
-                'data' => $attempt
+                'message' => "Sesi ujian siswa berhasil di-reset ({$modeText}). Pelanggaran aktif telah diatur ke 0 dan riwayat log tetap tercatat.",
+                'data' => $attempt->fresh()
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([

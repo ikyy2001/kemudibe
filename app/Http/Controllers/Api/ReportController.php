@@ -58,7 +58,7 @@ class ReportController extends Controller
     public function exams(Request $request)
     {
         try {
-            $exams = SubjectExam::with(['subject:id,name', 'subject.topic:id,name'])->get();
+            $exams = SubjectExam::with(['subject:id,name,topic_id', 'subject.topic:id,name', 'topic:id,name'])->get();
 
             $examReports = $exams->map(function ($exam) {
                 $attempts = ExamAttempt::where('subject_exam_id', $exam->id)->get();
@@ -73,7 +73,7 @@ class ReportController extends Controller
                     'id' => $exam->id,
                     'title' => $exam->name,
                     'subject' => $exam->subject?->name ?? 'General',
-                    'topic' => $exam->subject?->topic?->name ?? 'Curriculum',
+                    'topic' => $exam->topic?->name ?? $exam->subject?->topic?->name ?? 'Curriculum',
                     'total_points' => $exam->total_points ?? 100,
                     'total_candidates' => max($totalAttempts, rand(20, 60)),
                     'completed_attempts' => max($completed, rand(18, 55)),

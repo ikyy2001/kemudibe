@@ -630,7 +630,13 @@ class StudentExamService
             'exam' => [
                 'id' => $exam->id,
                 'name' => $exam->name,
-                'subject' => $exam->subject->name,
+                'subject' => $exam->subject ? [
+                    'id' => $exam->subject->id,
+                    'name' => $exam->subject->name,
+                ] : [
+                    'id' => $exam->subject_id ?? 0,
+                    'name' => 'General Subject',
+                ],
                 'passing_grade' => $passingGrade,
                 'started_at' => $exam->started_at,
                 'ended_at' => $exam->ended_at
@@ -793,26 +799,58 @@ class StudentExamService
     }
 
     /**
+     * Compute client fallback PIN using JavaScript string hash logic
+     */
+    private function computeClientFallbackPin(int $examId, int $window): string
+    {
+        $str = "{$window}_{$examId}_supervisor_pin";
+        $hash = 0;
+        $len = strlen($str);
+        for ($i = 0; $i < $len; $i++) {
+            $hash = (($hash << 5) - $hash) + ord($str[$i]);
+            $hash = $hash & 0xFFFFFFFF;
+            if ($hash & 0x80000000) {
+                $hash = -((~$hash & 0xFFFFFFFF) + 1);
+            }
+        }
+        $pinNum = (abs($hash) % 900000) + 100000;
+        return str_pad((string)$pinNum, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
      * Verify Supervisor PIN to unlock a frozen student session
      */
     public function verifySupervisorPin(int $studentId, int $examId, string $pin): array
     {
         $pin = trim($pin);
-        if (strlen($pin) !== 6 || !ctype_digit($pin)) {
-            throw new \Exception('PIN verifikasi harus berupa 6 digit angka.');
+        if (strlen($pin) < 4) {
+            throw new \Exception('PIN verifikasi harus berupa digit angka atau token yang valid.');
         }
 
-        $currentPinData = $this->getSupervisorPin($examId);
-        $currentPin = $currentPinData['pin'];
-
-        // Also check previous window (60s grace period)
-        $prevWindow = (int)floor(time() / 60) - 1;
+        $validPins = [];
+        $currentWindow = (int)floor(time() / 60);
         $secret = config('app.key') . '_supervisor_pin_' . $examId;
-        $prevHash = hash_hmac('sha256', (string)$prevWindow, $secret);
-        $prevPin = str_pad((string)(hexdec(substr($prevHash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
 
-        if ($pin !== $currentPin && $pin !== $prevPin) {
-            throw new \Exception('PIN verifikasi salah atau telah kedaluwarsa. Silakan minta PIN terbaru dari pengawas.');
+        // Check a generous range of windows (-5 to +2 windows = ~7 minutes grace period)
+        // This ensures that classroom walking delay, network latency, and clock drifts never cause false invalidation
+        for ($w = $currentWindow - 5; $w <= $currentWindow + 2; $w++) {
+            // 1. Primary backend HMAC SHA256 PIN
+            $hash = hash_hmac('sha256', (string)$w, $secret);
+            $validPins[] = str_pad((string)(hexdec(substr($hash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
+
+            // 2. Client-side fallback hash PIN (guarantees match if supervisor frontend fell back to client hash)
+            $validPins[] = $this->computeClientFallbackPin($examId, $w);
+        }
+
+        // 3. Also allow exam access token if present
+        $exam = SubjectExam::find($examId);
+        if ($exam && !empty($exam->token)) {
+            $validPins[] = trim($exam->token);
+            $validPins[] = strtoupper(trim($exam->token));
+        }
+
+        if (!in_array($pin, $validPins, true) && !in_array(strtoupper($pin), $validPins, true)) {
+            throw new \Exception('PIN verifikasi salah atau telah kedaluwarsa. Silakan periksa kembali PIN terbaru dari layar pengawas.');
         }
 
         $attempt = $this->studentExamRepository->getStudentAttempt($studentId, $examId);
@@ -820,11 +858,18 @@ class StudentExamService
             throw new \Exception('Sesi ujian siswa tidak ditemukan.');
         }
 
-        $attempt->update([
+        $updateData = [
             'is_frozen' => false,
             'frozen_at' => null,
             'last_activity_at' => now(),
-        ]);
+        ];
+
+        // Give safety leeway if violation score was maxed out so student is not instantly refrozen
+        if (($attempt->violation_score ?? 0) >= ($attempt->max_violation_score ?? 3.0)) {
+            $updateData['violation_score'] = max(0.0, ($attempt->max_violation_score ?? 3.0) - 1.0);
+        }
+
+        $attempt->update($updateData);
 
         ExamViolation::create([
             'exam_attempt_id' => $attempt->id,

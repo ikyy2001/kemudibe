@@ -26,7 +26,9 @@ class GradeController extends Controller
                 $query->where('subject_exam_id', $request->integer('exam_id'));
             }
 
-            if ($request->filled('student_id')) {
+            if ($request->user() && $request->user()->hasRole('student')) {
+                $query->where('student_id', $request->user()->id);
+            } elseif ($request->filled('student_id')) {
                 $query->where('student_id', $request->integer('student_id'));
             }
 

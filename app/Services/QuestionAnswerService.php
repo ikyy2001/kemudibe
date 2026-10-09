@@ -243,7 +243,16 @@ class QuestionAnswerService
         $answers = $this->questionAnswerRepository->getStudentAnswersForExam($studentId, $examId);
 
         if ($answers->isEmpty()) {
-            throw new \Exception('No answers found for this student and exam');
+            return [
+                'answers' => collect([]),
+                'summary' => [
+                    'total_questions' => 0,
+                    'total_points_earned' => 0,
+                    'total_possible_points' => 0,
+                    'percentage' => 0,
+                    'needs_grading' => 0
+                ]
+            ];
         }
 
         // Calculate total score

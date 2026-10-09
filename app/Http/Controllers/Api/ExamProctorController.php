@@ -292,10 +292,19 @@ class ExamProctorController extends Controller
             $supervisorName = $supervisor ? $supervisor->name : 'Pengawas';
             $supervisorRole = $supervisor && $supervisor->roles->first() ? strtoupper($supervisor->roles->first()->name) : 'PENGAWAS';
 
-            $reopenExam = $request->boolean('reopen_exam', false);
-            $retakeFromScratch = $request->boolean('retake_from_scratch', false);
-            $resetViolations = $request->boolean('reset_violations', true);
-            $reason = (string)$request->input('reason', '');
+            // Support both camelCase and snake_case request parameters
+            $reopenExam = $request->boolean('reopen_exam') || $request->boolean('reopenExam');
+            $retakeFromScratch = $request->boolean('retake_from_scratch') || $request->boolean('retakeFromScratch');
+            $resetViolations = $request->has('reset_violations') 
+                ? $request->boolean('reset_violations') 
+                : ($request->has('resetViolations') ? $request->boolean('resetViolations') : true);
+            $reason = (string)($request->input('reason') ?? '');
+
+            // If the attempt is currently completed, any session reset by a supervisor 
+            // should reopen the exam unless specifically told otherwise
+            if ($attempt->is_completed && !$retakeFromScratch) {
+                $reopenExam = true;
+            }
 
             $updateData = [
                 'current_exam_device_token' => null,
@@ -320,19 +329,23 @@ class ExamProctorController extends Controller
                 \App\Models\QuestionAnswer::where('exam_attempt_id', $attempt->id)->delete();
                 $updateData['answered_questions'] = 0;
                 $updateData['points_earned'] = 0;
-                $updateData['score_percentage'] = 0.0;
                 $updateData['has_passed'] = false;
-                $modeText = 'Kerjakan Ulang dari Awal (Semua jawaban di-reset)';
+                $modeText = 'Kerjakan Ulang dari Awal (Semua jawaban lama di-reset ke nomor 1)';
             } elseif ($reopenExam) {
                 $modeText = 'Lanjutkan Ujian (Jawaban tersimpan dipertahankan)';
             } else {
                 $modeText = 'Reset Sesi Perangkat';
             }
 
-            $attempt->update($updateData);
+            // Update all attempt records for this student and exam to ensure total consistency
+            ExamAttempt::where('subject_exam_id', $exam->id)
+                ->where('student_id', $studentId)
+                ->update($updateData);
+
+            $attempt->refresh();
 
             // AUDIT LOG: Preserve all past logs and record a supervisor audit trail entry
-            $detailsLog = "Sesi ujian di-reset oleh {$supervisorName} ({$supervisorRole}). Opsi: {$modeText}. Pelanggaran aktif diatur ke 0 agar siswa dapat mengikuti ujian.";
+            $detailsLog = "Sesi ujian di-reset oleh {$supervisorName} ({$supervisorRole}). Mode: {$modeText}. Pelanggaran aktif diatur ke 0 agar siswa dapat mengikuti ujian.";
             if (!empty($reason)) {
                 $detailsLog .= " Catatan pengawas: {$reason}";
             }
@@ -349,7 +362,7 @@ class ExamProctorController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Sesi ujian siswa berhasil di-reset ({$modeText}). Pelanggaran aktif telah diatur ke 0 dan riwayat log tetap tercatat.",
+                'message' => "Sesi ujian siswa berhasil di-reset ({$modeText}). Pelanggaran aktif telah diatur ke 0 dan riwayat insiden tetap tersimpan rapi.",
                 'data' => $attempt->fresh()
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {

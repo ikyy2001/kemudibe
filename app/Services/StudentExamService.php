@@ -133,16 +133,19 @@ class StudentExamService
 
             // Create or update exam attempt
             if ($existingAttempt) {
-                // Student is restarting the exam
+                $savedAnswersCount = \App\Models\QuestionAnswer::where('exam_attempt_id', $existingAttempt->id)->count();
+                $savedPointsEarned = \App\Models\QuestionAnswer::where('exam_attempt_id', $existingAttempt->id)->sum('points_earned');
+
+                // Student is restarting or resuming the exam
                 $existingAttempt->update([
                     'is_completed' => false,
                     'current_exam_device_token' => $deviceToken,
                     'last_activity_at' => now(),
                     'last_heartbeat_at' => now(),
                     'total_questions' => $exam->examQuestions->count(),
-                    'answered_questions' => 0,
+                    'answered_questions' => $savedAnswersCount,
                     'total_points' => $exam->total_points,
-                    'points_earned' => 0,
+                    'points_earned' => $savedPointsEarned,
                     'has_passed' => false,
                     'completed_at' => null,
                     'forced_reason' => null,

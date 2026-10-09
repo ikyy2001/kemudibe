@@ -72,7 +72,10 @@ class AnalyticsController extends Controller
             $totalAttempts = ExamAttempt::count();
             $attempts = ExamAttempt::all();
 
-            $avgScore = $totalAttempts > 0 ? round($attempts->avg('score_percentage'), 1) : 84.2;
+            $validAttempts = $attempts->filter(fn($a) => ($a->total_points ?? 0) > 0);
+            $avgScore = $validAttempts->isNotEmpty()
+                ? round($validAttempts->avg(fn($a) => (($a->points_earned ?? 0) / $a->total_points) * 100), 1)
+                : 84.2;
             $passedAttempts = $attempts->where('has_passed', true)->count();
             $passRate = $totalAttempts > 0 ? round(($passedAttempts / $totalAttempts) * 100, 1) : 87.5;
 

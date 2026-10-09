@@ -70,6 +70,11 @@ class ExamAttempt extends Model
         return $this->hasMany(ExamViolation::class);
     }
 
+    public function questionAnswers()
+    {
+        return $this->hasMany(QuestionAnswer::class);
+    }
+
     /**
      * Calculate score percentage
      */

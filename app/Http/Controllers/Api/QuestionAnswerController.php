@@ -190,11 +190,48 @@ class QuestionAnswerController extends Controller
         try {
             $result = $this->questionAnswerService->getStudentAnswers($studentId, $examId);
 
+            $attempt = \App\Models\ExamAttempt::where('student_id', $studentId)
+                ->where('subject_exam_id', $examId)
+                ->with(['violations' => function ($q) {
+                    $q->orderBy('occurred_at', 'asc');
+                }])
+                ->latest('id')
+                ->first();
+
             return response()->json([
                 'success' => true,
                 'data' => [
                     'answers' => QuestionAnswerResource::collection($result['answers']),
-                    'summary' => $result['summary']
+                    'summary' => $result['summary'],
+                    'attempt' => $attempt ? [
+                        'id' => $attempt->id,
+                        'student_id' => $attempt->student_id,
+                        'subject_exam_id' => $attempt->subject_exam_id,
+                        'is_completed' => $attempt->is_completed,
+                        'completed_at' => $attempt->completed_at ? $attempt->completed_at->toISOString() : null,
+                        'created_at' => $attempt->created_at ? $attempt->created_at->toISOString() : null,
+                        'started_at' => $attempt->created_at ? $attempt->created_at->toISOString() : null,
+                        'total_questions' => $attempt->total_questions,
+                        'answered_questions' => $attempt->answered_questions,
+                        'total_points' => $attempt->total_points,
+                        'points_earned' => $attempt->points_earned,
+                        'has_passed' => $attempt->has_passed,
+                        'violation_count' => $attempt->violation_count,
+                        'violation_score' => $attempt->violation_score,
+                        'forced_reason' => $attempt->forced_reason,
+                        'is_frozen' => $attempt->is_frozen,
+                    ] : null,
+                    'violations' => $attempt ? $attempt->violations->map(function ($v) {
+                        return [
+                            'id' => $v->id,
+                            'type' => $v->violation_type,
+                            'weight' => (float)($v->weight ?? 1.0),
+                            'duration_seconds' => (int)($v->duration_seconds ?? 0),
+                            'is_offline_gap' => (bool)($v->is_offline_gap ?? false),
+                            'details' => $v->details,
+                            'occurred_at' => $v->occurred_at ? \Carbon\Carbon::parse($v->occurred_at)->format('H:i:s') : null,
+                        ];
+                    }) : [],
                 ]
             ]);
         } catch (\Exception $e) {
@@ -202,7 +239,7 @@ class QuestionAnswerController extends Controller
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error' => config('app.debug') ? $e->getMessage() : null
-            ], $e->getMessage() === 'No answers found for this student and exam' ? 404 : 500);
+            ], 500);
         }
     }
 

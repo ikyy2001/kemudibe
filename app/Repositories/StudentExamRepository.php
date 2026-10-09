@@ -49,6 +49,7 @@ class StudentExamRepository
     {
         return ExamAttempt::where('student_id', $studentId)
             ->where('subject_exam_id', $examId)
+            ->orderBy('id', 'desc')
             ->first();
     }
 
@@ -60,6 +61,7 @@ class StudentExamRepository
         return ExamAttempt::where('student_id', $studentId)
             ->where('subject_exam_id', $examId)
             ->where('is_completed', true)
+            ->orderBy('id', 'desc')
             ->first();
     }
 

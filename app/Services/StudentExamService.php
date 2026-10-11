@@ -399,10 +399,34 @@ class StudentExamService
                 ];
             }
 
+            $isFrozen = (bool)($attempt->is_frozen);
+            $inGrace = !empty($attempt->grace_until) && now()->lt($attempt->grace_until);
+
+            // Deduplication: if identical violation happened within last 3 seconds, skip increment
+            $recentViolation = ExamViolation::where('exam_attempt_id', $attempt->id)
+                ->where('violation_type', $violationType)
+                ->where('occurred_at', '>=', now()->subSeconds(3))
+                ->first();
+
+            if ($recentViolation) {
+                return [
+                    'violation_count' => $attempt->violation_count ?? 0,
+                    'max_violations' => $attempt->max_violations ?? 3,
+                    'violation_score' => (float)($attempt->violation_score ?? 0.0),
+                    'max_violation_score' => (float)($attempt->max_violation_score ?? 3.0),
+                    'is_frozen' => (bool)$attempt->is_frozen,
+                    'is_locked' => (bool)$attempt->is_completed,
+                    'forced_submit' => false,
+                    'message' => 'Event duplikat diabaikan.'
+                ];
+            }
+
             // Determine violation weight:
-            // Light (0.5 pt): brief blur, brief tab switch (< 30s), notification interruption
-            // Full (1.0 pt): fullscreen exit, prolonged away (> 30s)
-            if ($weight === null) {
+            // If already frozen or in grace period, record info log with 0 weight (no score addition, no re-freeze)
+            if ($isFrozen || $inGrace) {
+                $weight = 0.0;
+                $triggerFreeze = false;
+            } else if ($weight === null) {
                 if ($violationType === 'fullscreen_exit' || $durationSeconds >= 30) {
                     $weight = 1.0;
                 } else {
@@ -421,8 +445,8 @@ class StudentExamService
                 'occurred_at' => now(),
             ]);
 
-            $newCount = ($attempt->violation_count ?? 0) + 1;
-            $newScore = round((float)($attempt->violation_score ?? 0.0) + $weight, 1);
+            $newCount = ($weight > 0.0) ? (($attempt->violation_count ?? 0) + 1) : ($attempt->violation_count ?? 0);
+            $newScore = ($weight > 0.0) ? round((float)($attempt->violation_score ?? 0.0) + $weight, 1) : (float)($attempt->violation_score ?? 0.0);
             $maxScore = (float)($attempt->max_violation_score ?? 3.0);
             $maxViolations = $attempt->max_violations ?? 3;
 
@@ -476,7 +500,9 @@ class StudentExamService
                 'is_frozen' => (bool)($updateData['is_frozen'] ?? $attempt->is_frozen),
                 'is_locked' => false,
                 'forced_submit' => false,
-                'message' => "Insiden tercatat (+{$weight} poin). Total skor pelanggaran: {$newScore} dari {$maxScore}."
+                'message' => ($weight > 0.0)
+                    ? "Insiden tercatat (+{$weight} poin). Total skor pelanggaran: {$newScore} dari {$maxScore}."
+                    : "Pemberitahuan aktivitas tercatat saat sesi aman/dibekukan."
             ];
         });
     }
@@ -498,8 +524,12 @@ class StudentExamService
         $now = now();
         $lastHeartbeat = $attempt->last_heartbeat_at ?: $attempt->last_activity_at;
 
+        $isFrozen = (bool)$attempt->is_frozen;
+        $inGrace = !empty($attempt->grace_until) && $now->lt($attempt->grace_until);
+
         // Detect offline gap (if gap > 35 seconds, missed multiple heartbeats)
-        if ($lastHeartbeat && $now->diffInSeconds($lastHeartbeat) > 35 && !$attempt->is_completed) {
+        // Skip penalty if attempt is already frozen or within grace period
+        if ($lastHeartbeat && $now->diffInSeconds($lastHeartbeat) > 35 && !$attempt->is_completed && !$isFrozen && !$inGrace) {
             $gapSeconds = $now->diffInSeconds($lastHeartbeat);
             $gapWeight = $gapSeconds >= 60 ? 1.0 : 0.5;
 
@@ -794,30 +824,14 @@ class StudentExamService
         $hash = hash_hmac('sha256', (string)$window, $secret);
         $pin = str_pad((string)(hexdec(substr($hash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
         $secondsRemaining = 60 - (time() % 60);
+        if ($secondsRemaining <= 0) {
+            $secondsRemaining = 60;
+        }
 
         return [
             'pin' => $pin,
             'seconds_remaining' => $secondsRemaining,
         ];
-    }
-
-    /**
-     * Compute client fallback PIN using JavaScript string hash logic
-     */
-    private function computeClientFallbackPin(int $examId, int $window): string
-    {
-        $str = "{$window}_{$examId}_supervisor_pin";
-        $hash = 0;
-        $len = strlen($str);
-        for ($i = 0; $i < $len; $i++) {
-            $hash = (($hash << 5) - $hash) + ord($str[$i]);
-            $hash = $hash & 0xFFFFFFFF;
-            if ($hash & 0x80000000) {
-                $hash = -((~$hash & 0xFFFFFFFF) + 1);
-            }
-        }
-        $pinNum = (abs($hash) % 900000) + 100000;
-        return str_pad((string)$pinNum, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -827,34 +841,33 @@ class StudentExamService
     {
         $pin = trim($pin);
         if (strlen($pin) < 4) {
-            throw new \Exception('PIN verifikasi harus berupa digit angka atau token yang valid.');
+            throw new \Exception('PIN verifikasi harus berupa 6 digit angka yang valid.');
+        }
+
+        // Rate limiting failed attempts per student exam session
+        $rateLimitKey = "exam_pin_failed_{$studentId}_{$examId}";
+        $failedAttempts = (int)\Illuminate\Support\Facades\Cache::get($rateLimitKey, 0);
+        if ($failedAttempts >= 5) {
+            throw new \Exception('Terlalu banyak percobaan PIN salah. Fitur input PIN terkunci sementara. Silakan tunggu 1 menit.');
         }
 
         $validPins = [];
         $currentWindow = (int)floor(time() / 60);
         $secret = config('app.key') . '_supervisor_pin_' . $examId;
 
-        // Check a generous range of windows (-5 to +2 windows = ~7 minutes grace period)
-        // This ensures that classroom walking delay, network latency, and clock drifts never cause false invalidation
-        for ($w = $currentWindow - 5; $w <= $currentWindow + 2; $w++) {
-            // 1. Primary backend HMAC SHA256 PIN
+        // Verify with current window and adjacent windows (-1 to +1, covering current and previous 60s window + clock drift)
+        for ($w = $currentWindow - 1; $w <= $currentWindow + 1; $w++) {
             $hash = hash_hmac('sha256', (string)$w, $secret);
             $validPins[] = str_pad((string)(hexdec(substr($hash, 0, 8)) % 900000 + 100000), 6, '0', STR_PAD_LEFT);
-
-            // 2. Client-side fallback hash PIN (guarantees match if supervisor frontend fell back to client hash)
-            $validPins[] = $this->computeClientFallbackPin($examId, $w);
         }
 
-        // 3. Also allow exam access token if present
-        $exam = SubjectExam::find($examId);
-        if ($exam && !empty($exam->token)) {
-            $validPins[] = trim($exam->token);
-            $validPins[] = strtoupper(trim($exam->token));
-        }
-
-        if (!in_array($pin, $validPins, true) && !in_array(strtoupper($pin), $validPins, true)) {
+        if (!in_array($pin, $validPins, true)) {
+            \Illuminate\Support\Facades\Cache::put($rateLimitKey, $failedAttempts + 1, 60);
             throw new \Exception('PIN verifikasi salah atau telah kedaluwarsa. Silakan periksa kembali PIN terbaru dari layar pengawas.');
         }
+
+        // Reset failed attempt counter on success
+        \Illuminate\Support\Facades\Cache::forget($rateLimitKey);
 
         $attempt = $this->studentExamRepository->getStudentAttempt($studentId, $examId);
         if (!$attempt) {
@@ -864,13 +877,9 @@ class StudentExamService
         $updateData = [
             'is_frozen' => false,
             'frozen_at' => null,
+            'grace_until' => now()->addSeconds(15),
             'last_activity_at' => now(),
         ];
-
-        // Give safety leeway if violation score was maxed out so student is not instantly refrozen
-        if (($attempt->violation_score ?? 0) >= ($attempt->max_violation_score ?? 3.0)) {
-            $updateData['violation_score'] = max(0.0, ($attempt->max_violation_score ?? 3.0) - 1.0);
-        }
 
         $attempt->update($updateData);
 

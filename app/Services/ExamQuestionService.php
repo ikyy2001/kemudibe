@@ -58,28 +58,44 @@ class ExamQuestionService
             $options = $data['options'] ?? [];
             unset($data['options']);
 
-            // Validate question type requirements
-            if ($data['type'] === 'multiple_choice' && empty($options)) {
-                throw new \Exception('Multiple choice questions must have at least one option');
+            // Normalize legacy multiple_choice
+            if ($data['type'] === 'multiple_choice') {
+                $data['type'] = ExamQuestion::TYPE_SINGLE_CHOICE;
             }
 
-            if ($data['type'] === 'multiple_choice' && !collect($options)->contains('is_correct', true)) {
+            // Validate question type requirements
+            if (in_array($data['type'], [ExamQuestion::TYPE_SINGLE_CHOICE, ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE])) {
+                if (empty($options)) {
+                    throw new \Exception('Question must have options or statements');
+                }
+            }
+
+            if ($data['type'] === ExamQuestion::TYPE_SINGLE_CHOICE && !collect($options)->contains('is_correct', true)) {
                 throw new \Exception('Multiple choice questions must have at least one correct option');
             }
 
-            if ($data['type'] === 'essay' && !empty($options)) {
+            if ($data['type'] === ExamQuestion::TYPE_MULTIPLE_ANSWER && !collect($options)->contains('is_correct', true)) {
+                throw new \Exception('Multiple answer questions must have at least one correct option');
+            }
+
+            if ($data['type'] === ExamQuestion::TYPE_TRUE_FALSE_TABLE && count($options) < 2) {
+                throw new \Exception('True/False table questions must have at least two statements');
+            }
+
+            if ($data['type'] === ExamQuestion::TYPE_ESSAY && !empty($options)) {
                 throw new \Exception('Essay questions cannot have options');
             }
 
             // Create the question
             $question = $this->examQuestionRepository->create($data);
 
-            // Create options for multiple choice questions
-            if ($data['type'] === 'multiple_choice' && !empty($options)) {
-                foreach ($options as $option) {
+            // Create options for non-essay questions
+            if ($data['type'] !== ExamQuestion::TYPE_ESSAY && !empty($options)) {
+                foreach ($options as $index => $option) {
                     $question->questionOptions()->create([
                         'name' => $option['name'],
-                        'is_correct' => $option['is_correct'] ?? false,
+                        'is_correct' => (bool)($option['is_correct'] ?? false),
+                        'sort_order' => (int)($option['sort_order'] ?? $index),
                     ]);
                 }
             }
@@ -106,13 +122,20 @@ class ExamQuestionService
             $options = $data['options'] ?? null;
             unset($data['options']);
 
+            if (isset($data['type']) && $data['type'] === 'multiple_choice') {
+                $data['type'] = ExamQuestion::TYPE_SINGLE_CHOICE;
+            }
+
+            $targetType = $data['type'] ?? $question->type;
+
             // Validate question type requirements if type is being changed
             if (isset($data['type'])) {
-                if ($data['type'] === 'multiple_choice' && $options === null && $question->questionOptions->isEmpty()) {
-                    throw new \Exception('Multiple choice questions must have options');
+                if (in_array($targetType, [ExamQuestion::TYPE_SINGLE_CHOICE, ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE]) 
+                    && $options === null && $question->questionOptions->isEmpty()) {
+                    throw new \Exception('Questions with options must have options');
                 }
 
-                if ($data['type'] === 'essay' && !$question->questionOptions->isEmpty()) {
+                if ($targetType === ExamQuestion::TYPE_ESSAY && !$question->questionOptions->isEmpty()) {
                     // Delete existing options when converting to essay
                     $question->questionOptions()->delete();
                 }
@@ -122,20 +145,22 @@ class ExamQuestionService
             $question = $this->examQuestionRepository->update($id, $data);
 
             // Update options if provided
-            if ($options !== null && ($question->type === 'multiple_choice' || $data['type'] === 'multiple_choice')) {
+            if ($options !== null && $targetType !== ExamQuestion::TYPE_ESSAY) {
                 // Delete existing options
                 $question->questionOptions()->delete();
 
-                // Validate at least one correct option
-                if (!collect($options)->contains('is_correct', true)) {
+                // Validate correct options for choices
+                if (in_array($targetType, [ExamQuestion::TYPE_SINGLE_CHOICE, ExamQuestion::TYPE_MULTIPLE_ANSWER]) 
+                    && !collect($options)->contains('is_correct', true)) {
                     throw new \Exception('Multiple choice questions must have at least one correct option');
                 }
 
                 // Create new options
-                foreach ($options as $option) {
+                foreach ($options as $index => $option) {
                     $question->questionOptions()->create([
                         'name' => $option['name'],
-                        'is_correct' => $option['is_correct'] ?? false,
+                        'is_correct' => (bool)($option['is_correct'] ?? false),
+                        'sort_order' => (int)($option['sort_order'] ?? $index),
                     ]);
                 }
             }
@@ -263,18 +288,26 @@ class ExamQuestionService
     {
         $questions = $this->getQuestionsBySubjectExam($subjectExamId);
         $totalQuestions = $questions->count();
-        $multipleChoice = $questions->where('type', 'multiple_choice')->count();
-        $essay = $questions->where('type', 'essay')->count();
+        $singleChoice = $questions->whereIn('type', [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice'])->count();
+        $multipleAnswer = $questions->where('type', ExamQuestion::TYPE_MULTIPLE_ANSWER)->count();
+        $trueFalseTable = $questions->where('type', ExamQuestion::TYPE_TRUE_FALSE_TABLE)->count();
+        $essay = $questions->where('type', ExamQuestion::TYPE_ESSAY)->count();
         $totalPoints = $questions->sum('points');
 
         return [
             'total_questions' => $totalQuestions,
-            'multiple_choice_count' => $multipleChoice,
+            'single_choice_count' => $singleChoice,
+            'multiple_answer_count' => $multipleAnswer,
+            'true_false_table_count' => $trueFalseTable,
+            'multiple_choice_count' => $singleChoice,
             'essay_count' => $essay,
             'total_points' => $totalPoints,
             'average_points' => $totalQuestions > 0 ? round($totalPoints / $totalQuestions, 2) : 0,
             'questions_by_type' => [
-                'multiple_choice' => $multipleChoice,
+                'single_choice' => $singleChoice,
+                'multiple_answer' => $multipleAnswer,
+                'true_false_table' => $trueFalseTable,
+                'multiple_choice' => $singleChoice,
                 'essay' => $essay
             ]
         ];
@@ -290,14 +323,25 @@ class ExamQuestionService
             throw new \Exception('Subject exam not found');
         }
 
+        $type = ($data['type'] ?? '') === 'multiple_choice' ? ExamQuestion::TYPE_SINGLE_CHOICE : ($data['type'] ?? '');
+
         // Validate question type specific requirements
-        if ($data['type'] === 'multiple_choice') {
+        if (in_array($type, [ExamQuestion::TYPE_SINGLE_CHOICE, ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE])) {
             if (!isset($data['options']) || empty($data['options'])) {
-                throw new \Exception('Multiple choice questions must have options');
+                throw new \Exception('Question must have options or statements');
             }
 
-            if (!collect($data['options'])->contains('is_correct', true)) {
+            if (in_array($type, [ExamQuestion::TYPE_SINGLE_CHOICE, ExamQuestion::TYPE_MULTIPLE_ANSWER]) 
+                && !collect($data['options'])->contains('is_correct', true)) {
                 throw new \Exception('Multiple choice questions must have at least one correct option');
+            }
+
+            if ($type === ExamQuestion::TYPE_TRUE_FALSE_TABLE && count($data['options']) < 2) {
+                throw new \Exception('True/False table questions must have at least two statements');
+            }
+        } elseif ($type === ExamQuestion::TYPE_ESSAY) {
+            if (isset($data['options']) && !empty($data['options'])) {
+                throw new \Exception('Essay questions cannot have options');
             }
         }
 

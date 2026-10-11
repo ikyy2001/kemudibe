@@ -922,27 +922,52 @@ class SubjectExamController extends Controller
                     'timer' => $question->timer
                 ];
 
-                if ($question->type === 'multiple_choice') {
-                    $correctOption = $question->questionOptions->where('is_correct', true)->first();
-                    $questionData['options'] = $question->questionOptions->map(function($option) use ($answer, $correctOption) {
+                if ($question->type !== 'essay') {
+                    $selectedIds = [];
+                    if (is_array($answer->answer_data)) {
+                        $selectedIds = $answer->answer_data['selected'] ?? [];
+                    }
+                    $correctOptions = $question->questionOptions->where('is_correct', true);
+                    $correctOption = $correctOptions->first();
+
+                    $tfAnswers = [];
+                    if ($question->type === 'true_false_table' && is_array($answer->answer_data)) {
+                        $tfAnswers = $answer->answer_data['answers'] ?? [];
+                    }
+
+                    $questionData['options'] = $question->questionOptions->map(function($option) use ($answer, $selectedIds, $tfAnswers, $question) {
+                        $isStudentAnswer = in_array($option->id, $selectedIds)
+                            || trim((string)($answer->answer_text ?? '')) === trim((string)$option->name);
+                        $studentChoice = null;
+                        if ($question->type === 'true_false_table') {
+                            $studentChoice = array_key_exists($option->id, $tfAnswers) ? (bool)$tfAnswers[$option->id] : null;
+                        }
                         return [
                             'id' => $option->id,
+                            'name' => $option->name,
                             'text' => $option->name,
-                            'is_correct' => $option->is_correct,
-                            'is_student_answer' => trim($answer->answer_text) === trim($option->name)
+                            'is_correct' => (bool)$option->is_correct,
+                            'is_student_answer' => $isStudentAnswer,
+                            'student_choice' => $studentChoice,
                         ];
                     });
-                    $questionData['correct_answer'] = $correctOption ? $correctOption->name : null;
+                    $questionData['question_options'] = $questionData['options'];
+                    $questionData['correct_answer'] = $correctOptions->pluck('name')->implode(', ');
+                    $questionData['category'] = $question->category;
                 }
 
                 return [
+                    'id' => $answer->id,
                     'answer_id' => $answer->id,
                     'question' => $questionData,
                     'student_answer' => $answer->answer_text,
-                    'points_earned' => $answer->points_earned,
+                    'answer_text' => $answer->answer_text,
+                    'answer_data' => $answer->answer_data,
+                    'result_status' => $answer->result_status,
+                    'points_earned' => (float)$answer->points_earned,
                     'has_passed' => $answer->has_passed,
                     'is_correct' => $answer->has_passed,
-                    'needs_grading' => $question->type === 'essay' && $answer->points_earned === 0,
+                    'needs_grading' => $question->type === 'essay' && (float)$answer->points_earned === 0.0,
                     'feedback' => $answer->feedback,
                     'answered_at' => $answer->created_at
                 ];

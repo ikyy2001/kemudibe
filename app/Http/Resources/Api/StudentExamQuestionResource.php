@@ -20,6 +20,11 @@ class StudentExamQuestionResource extends JsonResource
             'name' => $this->name,
             'timer' => $this->timer,
             'type' => $this->type,
+            'category' => $this->category,
+            'shuffle_options' => (bool)($this->shuffle_options ?? true),
+            'correct_count' => in_array($this->type, [\App\Models\ExamQuestion::TYPE_MULTIPLE_ANSWER]) 
+                ? ($this->relationLoaded('questionOptions') ? $this->questionOptions->where('is_correct', true)->count() : null)
+                : null,
             'points' => $this->points,
             'question_options' => StudentQuestionOptionResource::collection($this->whenLoaded('questionOptions')),
             'question_answers_count' => $this->whenCounted('questionAnswers'),

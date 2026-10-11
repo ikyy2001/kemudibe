@@ -19,8 +19,10 @@ class ResultQuestionAnswerResource extends JsonResource
             'exam_question_id' => $this->exam_question_id,
             'student_id' => $this->student_id,
             'answer_text' => $this->answer_text,
+            'answer_data' => $this->answer_data,
             'has_passed' => $this->has_passed,
-            'points_earned' => $this->points_earned,
+            'result_status' => $this->result_status,
+            'points_earned' => (float)$this->points_earned,
             'feedback' => $this->feedback,
             'score_percentage' => $this->whenLoaded('examQuestion', function () {
                 $maxPoints = $this->examQuestion->points ?? 0;

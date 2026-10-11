@@ -52,6 +52,7 @@ class ExamAttempt extends Model
         'max_violations' => 'integer',
         'violation_score' => 'float',
         'max_violation_score' => 'float',
+        'points_earned' => 'float',
         'freeze_count' => 'integer',
         'offline_gaps_count' => 'integer',
         'total_offline_seconds' => 'integer',

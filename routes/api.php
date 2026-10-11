@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\StudentExamController;
 use App\Http\Controllers\Api\ExamAttemptController;
 use App\Http\Controllers\Api\QuestionAnswerController;
 use App\Http\Controllers\Api\ExamQuestionController;
+use App\Http\Controllers\Api\QuestionImageController;
 use App\Http\Controllers\Api\QuestionOptionController;
 use App\Http\Controllers\Api\StatisticsController;
 use App\Http\Controllers\Api\ClassroomActivityController;
@@ -320,6 +321,7 @@ Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->gro
         Route::delete('exam-questions/{id}', [ExamQuestionController::class, 'destroy']);
         Route::post('exam-questions/bulk-create', [ExamQuestionController::class, 'bulkStore']);
         Route::post('exam-questions/{id}/duplicate', [ExamQuestionController::class, 'duplicate']);
+        Route::post('question-images', [QuestionImageController::class, 'upload']);
         Route::get('subject-exams/{subjectExamId}/questions', [ExamQuestionController::class, 'getBySubjectExam']);
         Route::get('subject-exams/{subjectExamId}/questions/statistics', [ExamQuestionController::class, 'statistics']);
         Route::get('subject-exams/{subjectExamId}/questions/for-grading', [ExamQuestionController::class, 'forGrading']);

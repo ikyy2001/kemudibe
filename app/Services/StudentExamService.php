@@ -8,6 +8,7 @@ use App\Repositories\ExamAttemptRepository;
 use App\Repositories\QuestionAnswerRepository;
 use App\Repositories\ExamQuestionRepository;
 use App\Models\SubjectExam;
+use App\Models\ExamQuestion;
 use App\Models\ExamViolation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -244,40 +245,44 @@ class StudentExamService
 
             $attempt->update(['last_activity_at' => now()]);
 
-            // Process the answer
-            $answerText = $data['answer_text'];
-            $pointsEarned = 0;
-            $hasPassed = false;
-
-            if ($question->type === 'multiple_choice') {
-                // Auto-grade multiple choice
-                $correctOption = $question->questionOptions->where('is_correct', true)->first();
-                if ($correctOption && $answerText !== null && strcasecmp(trim((string)$answerText), trim((string)$correctOption->name)) === 0) {
-                    $pointsEarned = $question->points;
-                    $hasPassed = true;
+            // Determine raw answer to grade
+            $rawAnswer = $data['answer_data'] ?? null;
+            if ($rawAnswer === null) {
+                if (isset($data['option_id'])) {
+                    $rawAnswer = $data['option_id'];
+                } elseif (isset($data['option_ids'])) {
+                    $rawAnswer = $data['option_ids'];
+                } else {
+                    $rawAnswer = $data['answer_text'] ?? null;
                 }
-            } else {
-                // Essay questions: has_passed = true if answer submitted, false if empty
-                $hasPassed = !empty(trim($answerText ?? ''));
             }
+
+            $grader = \App\Services\Grading\GraderFactory::make($question->type);
+            $gradeResult = $grader->grade($question, $rawAnswer);
+
+            $answerText = $gradeResult->answerText ?? ($data['answer_text'] ?? null);
+            $hasPassed = $gradeResult->hasPassed;
+            $pointsEarned = $gradeResult->pointsEarned;
+            $resultStatus = $gradeResult->resultStatus;
+            $answerData = $gradeResult->answerData;
 
             // Save or update the answer
             $existingAnswer = $this->questionAnswerRepository->findByQuestionAndStudent($questionId, $studentId);
 
+            $answerPayload = [
+                'answer_text' => $answerText,
+                'answer_data' => $answerData,
+                'has_passed' => $hasPassed,
+                'result_status' => $resultStatus,
+                'points_earned' => $pointsEarned
+            ];
+
             if ($existingAnswer) {
-                $answer = $this->questionAnswerRepository->update($existingAnswer->id, [
-                    'answer_text' => $answerText,
-                    'has_passed' => $hasPassed,
-                    'points_earned' => $pointsEarned
-                ]);
+                $answer = $this->questionAnswerRepository->update($existingAnswer->id, $answerPayload);
             } else {
-                $answer = $this->questionAnswerRepository->create([
-                    'exam_question_id' => $questionId,
-                    'student_id' => $studentId,
-                    'answer_text' => $answerText,
-                    'has_passed' => $hasPassed,
-                    'points_earned' => $pointsEarned
-                ]);
+                $answerPayload['exam_question_id'] = $questionId;
+                $answerPayload['student_id'] = $studentId;
+                $answer = $this->questionAnswerRepository->create($answerPayload);
             }
 
             // Update attempt totals (questions count and points earned)
@@ -289,7 +294,7 @@ class StudentExamService
             return [
                 'answer' => $answer,
                 'question_type' => $question->type,
-                'auto_graded' => $question->type === 'multiple_choice',
+                'auto_graded' => $question->type !== ExamQuestion::TYPE_ESSAY,
                 'points_earned' => $pointsEarned,
                 'total_answered' => $answeredCount,
                 'total_questions' => $attempt->total_questions
@@ -793,7 +798,10 @@ class StudentExamService
         }
 
         foreach ($exam->examQuestions as $question) {
-            if ($question->type === 'multiple_choice' && $question->relationLoaded('questionOptions')) {
+            $isChoiceType = in_array($question->type, [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE]);
+            $canShuffle = (bool)($question->shuffle_options ?? true);
+
+            if ($isChoiceType && $canShuffle && $question->relationLoaded('questionOptions')) {
                 $options = $question->questionOptions->values();
                 if ($options->count() > 1) {
                     // Seed PRNG deterministically based on student, question, and exam

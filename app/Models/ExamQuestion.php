@@ -12,13 +12,26 @@ class ExamQuestion extends Model
 {
     use HasFactory, BelongsToInstitution;
 
+    public const TYPE_SINGLE_CHOICE = 'single_choice';
+    public const TYPE_MULTIPLE_ANSWER = 'multiple_answer';
+    public const TYPE_TRUE_FALSE_TABLE = 'true_false_table';
+    public const TYPE_ESSAY = 'essay';
+
     protected $fillable = [
         'institution_id',
         'subject_exam_id',
         'name',
         'timer',
         'type',
+        'category',
+        'shuffle_options',
         'points',
+    ];
+
+    protected $casts = [
+        'shuffle_options' => 'boolean',
+        'timer' => 'integer',
+        'points' => 'integer',
     ];
 
     protected static function booted()

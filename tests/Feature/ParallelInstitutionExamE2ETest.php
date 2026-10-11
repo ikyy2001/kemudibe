@@ -73,6 +73,16 @@ class ParallelInstitutionExamE2ETest extends TestCase
             ->where('subject_exam_id', $this->examB->id)
             ->firstOrFail();
 
+        // Ensure exams are active during test execution
+        $this->examA->update([
+            'started_at' => now()->subHours(2),
+            'ended_at' => now()->addHours(48),
+        ]);
+        $this->examB->update([
+            'started_at' => now()->subHours(2),
+            'ended_at' => now()->addHours(48),
+        ]);
+
         // Ensure clean slate for attempts
         $this->cleanupAttempts();
     }

@@ -11,18 +11,27 @@ class QuestionAnswer extends Model
 {
     use HasFactory, BelongsToInstitution;
 
+    public const STATUS_CORRECT = 'correct';
+    public const STATUS_PARTIAL = 'partial';
+    public const STATUS_WRONG = 'wrong';
+    public const STATUS_PENDING = 'pending';
+
     protected $fillable = [
         'institution_id',
         'exam_question_id',
         'student_id',
         'answer_text',
+        'answer_data',
         'has_passed',
+        'result_status',
         'points_earned',
         'feedback',
     ];
 
     protected $casts = [
         'has_passed' => 'boolean',
+        'points_earned' => 'float',
+        'answer_data' => 'array',
     ];
 
     public function examQuestion(): BelongsTo

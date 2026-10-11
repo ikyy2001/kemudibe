@@ -22,9 +22,13 @@ class StudentAnswerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'answer_text' => 'nullable|string|max:2000',
+            'answer_text' => 'nullable|string',
+            'answer_data' => 'nullable',
+            'option_id' => 'nullable|integer',
+            'option_ids' => 'nullable|array',
+            'option_ids.*' => 'integer',
             'has_passed' => 'sometimes|boolean',
-            'points_earned' => 'nullable|integer|min:0|max:100',
+            'points_earned' => 'nullable|numeric|min:0|max:100',
         ];
     }
 

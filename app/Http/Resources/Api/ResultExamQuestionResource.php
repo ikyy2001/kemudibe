@@ -20,6 +20,8 @@ class ResultExamQuestionResource extends JsonResource
             'name' => $this->name,
             'timer' => $this->timer,
             'type' => $this->type,
+            'category' => $this->category,
+            'shuffle_options' => (bool)($this->shuffle_options ?? true),
             'points' => $this->points,
             'question_options' => ResultQuestionOptionResource::collection($this->whenLoaded('questionOptions')),
             'question_answers_count' => $this->whenCounted('questionAnswers'),

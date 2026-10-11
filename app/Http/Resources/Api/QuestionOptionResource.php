@@ -19,6 +19,7 @@ class QuestionOptionResource extends JsonResource
             'exam_question_id' => $this->exam_question_id,
             'name' => $this->name,
             'is_correct' => $this->is_correct,
+            'sort_order' => $this->sort_order ?? 0,
             'exam_question' => new ExamQuestionResource($this->whenLoaded('examQuestion')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

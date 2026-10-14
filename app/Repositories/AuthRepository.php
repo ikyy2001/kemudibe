@@ -89,6 +89,7 @@ class AuthRepository
                 'name' => $institution->name,
                 'status' => $institution->status,
                 'is_read_only' => $institution->isReadOnly(),
+                'is_expired' => $institution->isExpired(),
             ],
             'user' => new UserResource($user->load(['roles', 'institution'])),
             'must_change_password' => (bool) $user->must_change_password,

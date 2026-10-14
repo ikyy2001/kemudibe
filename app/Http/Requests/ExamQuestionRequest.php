@@ -100,7 +100,7 @@ class ExamQuestionRequest extends FormRequest
             'timer.min' => 'Timer must be at least 1 second',
             'timer.max' => 'Timer must not exceed 3600 seconds (1 hour)',
             'type.required' => 'Question type is required',
-            'type.in' => 'Question type must be either multiple_choice or essay',
+            'type.in' => 'Question type must be one of: single_choice, multiple_choice, multiple_answer, true_false_table, essay',
             'points.required' => 'Points value is required',
             'points.integer' => 'Points must be a number',
             'points.min' => 'Points must be at least 1',

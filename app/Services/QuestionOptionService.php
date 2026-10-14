@@ -48,15 +48,16 @@ class QuestionOptionService
     public function createQuestionOption(array $data): QuestionOption
     {
         return DB::transaction(function () use ($data) {
-            // Verify exam question exists and is multiple choice
+            // Verify exam question exists and allows options
             $examQuestion = ExamQuestion::findOrFail($data['exam_question_id']);
             
-            if ($examQuestion->type !== 'multiple_choice') {
-                throw new \Exception('Options can only be added to multiple choice questions');
+            $allowedTypes = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+            if (!in_array($examQuestion->type, $allowedTypes)) {
+                throw new \Exception('Options can only be added to multiple choice, checkbox, or table questions');
             }
 
-            // If this option is marked as correct, ensure no other option is correct
-            if ($data['is_correct'] ?? false) {
+            // If this option is marked as correct, ensure no other option is correct only for single choice
+            if (($data['is_correct'] ?? false) && in_array($examQuestion->type, [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice'])) {
                 $this->ensureOnlyOneCorrectOption($data['exam_question_id'], null);
             }
 
@@ -78,18 +79,19 @@ class QuestionOptionService
         return DB::transaction(function () use ($id, $data) {
             $option = $this->questionOptionRepository->findWithRelations($id);
 
-            // Verify question is multiple choice
-            if ($option->examQuestion->type !== 'multiple_choice') {
-                throw new \Exception('Options can only be updated for multiple choice questions');
+            // Verify question allows options
+            $allowedTypes = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+            if (!in_array($option->examQuestion->type, $allowedTypes)) {
+                throw new \Exception('Options can only be updated for multiple choice, checkbox, or table questions');
             }
 
-            // If this option is being marked as correct, ensure no other option is correct
-            if (isset($data['is_correct']) && $data['is_correct']) {
+            // If this option is being marked as correct, ensure no other option is correct only for single choice
+            if (isset($data['is_correct']) && $data['is_correct'] && in_array($option->examQuestion->type, [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice'])) {
                 $this->ensureOnlyOneCorrectOption($option->exam_question_id, $id);
             }
 
-            // If this is the only correct option and we're unmarking it, prevent it
-            if (isset($data['is_correct']) && !$data['is_correct'] && $option->is_correct) {
+            // If this is the only correct option and we're unmarking it, prevent it (only for single choice)
+            if (isset($data['is_correct']) && !$data['is_correct'] && $option->is_correct && in_array($option->examQuestion->type, [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice'])) {
                 $correctCount = $this->questionOptionRepository->countCorrectByQuestion($option->exam_question_id);
                 if ($correctCount <= 1) {
                     throw new \Exception('Cannot unmark the only correct option. Mark another option as correct first.');
@@ -114,7 +116,7 @@ class QuestionOptionService
                 throw new \Exception('Cannot delete option. Multiple choice questions must have at least 2 options.');
             }
 
-            if ($option->is_correct) {
+            if ($option->is_correct && in_array($option->examQuestion->type, [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice'])) {
                 $correctCount = $this->questionOptionRepository->countCorrectByQuestion($option->exam_question_id);
                 if ($correctCount <= 1) {
                     throw new \Exception('Cannot delete the only correct option. Mark another option as correct first.');
@@ -152,10 +154,11 @@ class QuestionOptionService
                 ->where('exam_question_id', $examQuestionId)
                 ->firstOrFail();
 
-            // Verify the question is multiple choice
+            // Verify the question allows options
             $examQuestion = ExamQuestion::findOrFail($examQuestionId);
-            if ($examQuestion->type !== 'multiple_choice') {
-                throw new \Exception('Correct options can only be set for multiple choice questions');
+            $allowedTypes = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+            if (!in_array($examQuestion->type, $allowedTypes)) {
+                throw new \Exception('Correct options can only be set for multiple choice, checkbox, or table questions');
             }
 
             // Update correct option
@@ -171,11 +174,12 @@ class QuestionOptionService
     public function bulkCreateOptionsForQuestion(int $examQuestionId, array $optionsData): Collection
     {
         return DB::transaction(function () use ($examQuestionId, $optionsData) {
-            // Verify exam question exists and is multiple choice
+            // Verify exam question exists and allows options
             $examQuestion = ExamQuestion::findOrFail($examQuestionId);
             
-            if ($examQuestion->type !== 'multiple_choice') {
-                throw new \Exception('Options can only be added to multiple choice questions');
+            $allowedTypes = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+            if (!in_array($examQuestion->type, $allowedTypes)) {
+                throw new \Exception('Options can only be added to multiple choice, checkbox, or table questions');
             }
 
             // Validate options data
@@ -218,10 +222,11 @@ class QuestionOptionService
             throw new \Exception('Exam question not found');
         }
 
-        // Verify exam question is multiple choice
+        // Verify exam question allows options
         $examQuestion = ExamQuestion::find($data['exam_question_id']);
-        if ($examQuestion->type !== 'multiple_choice') {
-            throw new \Exception('Options can only be added to multiple choice questions');
+        $allowedTypes = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+        if (!in_array($examQuestion->type, $allowedTypes)) {
+            throw new \Exception('Options can only be added to multiple choice, checkbox, or table questions');
         }
 
         return true;

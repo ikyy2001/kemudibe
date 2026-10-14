@@ -132,8 +132,9 @@ class ExamQuestionRepository
             'points' => $original->points,
         ]);
 
-        // Duplicate options if multiple choice
-        if ($original->type === 'multiple_choice') {
+        // Duplicate options if question type has options
+        $typesWithOptions = [ExamQuestion::TYPE_SINGLE_CHOICE, 'multiple_choice', ExamQuestion::TYPE_MULTIPLE_ANSWER, ExamQuestion::TYPE_TRUE_FALSE_TABLE];
+        if (in_array($original->type, $typesWithOptions)) {
             foreach ($original->questionOptions as $option) {
                 $duplicated->questionOptions()->create([
                     'name' => $option->name,

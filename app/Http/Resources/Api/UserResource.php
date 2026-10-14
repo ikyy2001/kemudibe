@@ -30,6 +30,7 @@ class UserResource extends JsonResource
                 'name' => $this->institution->name,
                 'status' => $this->institution->status,
                 'is_read_only' => $this->institution->isReadOnly(),
+                'is_expired' => $this->institution->isExpired(),
             ] : null,
             'roles' => $this->when($this->relationLoaded('roles'), function () {
                 return $this->roles->pluck('name');

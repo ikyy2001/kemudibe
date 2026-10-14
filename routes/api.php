@@ -62,6 +62,7 @@ Route::get('institutions/{slug}', function ($slug) {
             'logo' => $inst->logo,
             'status' => $inst->status,
             'is_read_only' => $inst->isReadOnly(),
+            'is_expired' => $inst->isExpired(),
         ]
     ]);
 });
@@ -133,6 +134,7 @@ Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->gro
                 'storage_used_bytes' => $inst->storage_used_bytes,
                 'storage_used_mb' => round($inst->storage_used_bytes / (1024 * 1024), 2),
                 'is_read_only' => $inst->isReadOnly(),
+                'is_expired' => $inst->isExpired(),
             ]
         ]);
     });

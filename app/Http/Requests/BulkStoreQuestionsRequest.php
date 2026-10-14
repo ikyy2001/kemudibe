@@ -26,11 +26,11 @@ class BulkStoreQuestionsRequest extends FormRequest
             'questions.*.subject_exam_id' => ['required', 'integer', \App\Rules\TenantRule::exists('subject_exams', 'id')],
             'questions.*.name' => 'required|string|max:65535',
             'questions.*.timer' => 'nullable|integer|min:0|max:3600',
-            'questions.*.type' => 'required|string|in:multiple_choice,essay',
+            'questions.*.type' => 'required|string|in:single_choice,multiple_answer,true_false_table,essay,multiple_choice',
             'questions.*.points' => 'required|integer|min:1|max:100',
-            'questions.*.options' => 'array',
-            'questions.*.options.*.name' => 'required|string|max:65535',
-            'questions.*.options.*.is_correct' => 'required|boolean'
+            'questions.*.options' => 'nullable|array',
+            'questions.*.options.*.name' => 'required_with:questions.*.options|string|max:65535',
+            'questions.*.options.*.is_correct' => 'nullable|boolean'
         ];
     }
 
@@ -53,7 +53,7 @@ class BulkStoreQuestionsRequest extends FormRequest
             'questions.*.timer.min' => 'Timer must be at least 1 second',
             'questions.*.timer.max' => 'Timer cannot exceed 3600 seconds (1 hour)',
             'questions.*.type.required' => 'Question type is required',
-            'questions.*.type.in' => 'Question type must be either multiple_choice or essay',
+            'questions.*.type.in' => 'Question type must be one of: single_choice, multiple_choice, multiple_answer, true_false_table, essay',
             'questions.*.points.required' => 'Points are required for each question',
             'questions.*.points.min' => 'Points must be at least 1',
             'questions.*.points.max' => 'Points cannot exceed 100',

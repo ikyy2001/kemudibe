@@ -82,9 +82,17 @@ class AiChatService
             'max_tokens' => (int) config('ai.max_tokens', 300),
         ]);
 
+        $reply = $response->content;
+
+        // Strict Guardrail: Mencegah bypass/jailbreak yang memaksa AI menggenerasi kode HTML atau pemrograman
+        if (preg_match('/<form|<input|<script|<select|<\/form>|```(html|javascript|php|python|sql|bash|sh|css)/i', $reply)) {
+            $whatsappUrl = config('ai.contact_whatsapp_url', 'https://wa.me/6287897600086');
+            $reply = "Maaf, saya adalah Asisten AI Resmi Kemudi. Saya bertugas memberikan informasi seputar fitur, paket harga, dan panduan penggunaan Kemudi LMS & CBT, serta tidak menyediakan layanan pembuatan kode pemrograman, form HTML, atau script teknis.\n\nJika Anda membutuhkan informasi seputar fitur Kemudi atau demo gratis, silakan hubungi [WhatsApp Sales Kemudi]({$whatsappUrl}).";
+        }
+
         // 5. Structure response payload
         $result = [
-            'reply' => $response->content,
+            'reply' => $reply,
             'cached' => false,
         ];
 

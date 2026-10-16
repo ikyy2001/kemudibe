@@ -17,7 +17,7 @@ class ChatRequest extends FormRequest
     }
 
     /**
-     * Prepare inputs for validation (trim message).
+     * Prepare inputs for validation (trim message & auto-truncate history content).
      */
     protected function prepareForValidation(): void
     {
@@ -25,6 +25,19 @@ class ChatRequest extends FormRequest
             $this->merge([
                 'message' => trim($this->message),
             ]);
+        }
+
+        if ($this->has('history') && is_array($this->history)) {
+            $cleanedHistory = [];
+            foreach ($this->history as $item) {
+                if (is_array($item)) {
+                    $cleanedHistory[] = [
+                        'role' => isset($item['role']) ? trim((string) $item['role']) : '',
+                        'content' => isset($item['content']) ? mb_substr(trim((string) $item['content']), 0, 600) : '',
+                    ];
+                }
+            }
+            $this->merge(['history' => $cleanedHistory]);
         }
     }
 
@@ -70,7 +83,7 @@ class ChatRequest extends FormRequest
             ],
             'history' => ['nullable', 'array', 'max:6'],
             'history.*.role' => ['required', 'string', 'in:user,assistant'],
-            'history.*.content' => ['required', 'string', 'max:600'],
+            'history.*.content' => ['required', 'string', 'max:1000'],
         ];
     }
 

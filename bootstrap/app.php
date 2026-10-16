@@ -12,6 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $trustedProxies = env('TRUSTED_PROXIES');
+        if ($trustedProxies !== null && $trustedProxies !== '') {
+            $proxies = str_contains($trustedProxies, ',')
+                ? array_map('trim', explode(',', $trustedProxies))
+                : $trustedProxies;
+            $middleware->trustProxies(at: $proxies);
+        } else {
+            $middleware->trustProxies(at: '*');
+        }
+
         $middleware->validateCsrfTokens(except: [
             'api/*',
             'sanctum/csrf-cookie',

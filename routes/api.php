@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\ExamProctorController;
 use App\Http\Controllers\Api\SuperAdmin\InstitutionController as SuperAdminInstitutionController;
 use App\Http\Controllers\Api\SuperAdmin\OverviewController as SuperAdminOverviewController;
 use App\Http\Controllers\Api\SuperAdmin\AuditLogController as SuperAdminAuditLogController;
+use App\Http\Controllers\Api\AiChatController;
 use App\Models\Institution;
 
 /*
@@ -77,6 +78,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('user', [AuthController::class, 'user']);
     Route::post('auth/change-password', [AuthController::class, 'changePassword']);
     Route::put('user/password', [ProfileController::class, 'updatePassword']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| AI Assistant Routes: /api/ai/...
+|--------------------------------------------------------------------------
+*/
+Route::prefix('ai')->group(function () {
+    // Quota info endpoints (light throttle, does not consume AI quota)
+    Route::middleware('throttle:ai-quota')->get('public/quota', [AiChatController::class, 'publicQuota']);
+    Route::middleware(['auth:sanctum', 'throttle:ai-quota'])->get('quota', [AiChatController::class, 'dashboardQuota']);
+
+    // Chat endpoints (throttled by named limiter ai-chat)
+    Route::middleware('throttle:ai-chat')->post('public/chat', [AiChatController::class, 'publicChat']);
+    Route::middleware(['auth:sanctum', 'throttle:ai-chat'])->post('chat', [AiChatController::class, 'dashboardChat']);
+
+    // Admin usage analytics endpoint
+    Route::middleware(['auth:sanctum', 'role:superadmin|pic|manager|admin'])->get('admin/usage', [AiChatController::class, 'adminUsage']);
 });
 
 /*

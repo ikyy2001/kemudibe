@@ -84,10 +84,17 @@ class AiChatService
 
         $reply = $response->content;
 
-        // Strict Guardrail: Mencegah bypass/jailbreak yang memaksa AI menggenerasi kode HTML atau pemrograman
-        if (preg_match('/<form|<input|<script|<select|<\/form>|```(html|javascript|php|python|sql|bash|sh|css)/i', $reply)) {
-            $whatsappUrl = config('ai.contact_whatsapp_url', 'https://wa.me/6287897600086');
-            $reply = "Maaf, saya adalah Asisten AI Resmi Kemudi. Saya bertugas memberikan informasi seputar fitur, paket harga, dan panduan penggunaan Kemudi LMS & CBT, serta tidak menyediakan layanan pembuatan kode pemrograman, form HTML, atau script teknis.\n\nJika Anda membutuhkan informasi seputar fitur Kemudi atau demo gratis, silakan hubungi [WhatsApp Sales Kemudi]({$whatsappUrl}).";
+        // Strict Guardrail: Mencegah bypass/jailbreak, kode pemrograman, dan jawaban kompromi di luar domain
+        $isCompromised = preg_match('/<form|<input|<script|<select|<\/form>|```(html|javascript|php|python|sql|bash|sh|css)/i', $reply)
+            || preg_match('/(tidak berkaitan|bukan bagian|di luar|bukan ranah|terlepas dari|meskipun)[\s\S]*?(namun|tetapi|tapi|sebagai bantuan|secara umum|secara ilmiah)/iu', $reply)
+            || preg_match('/(sebagai bantuan awal|namun,?\s*sebagai bantuan)/iu', $reply)
+            || preg_match('/(namun|tetapi|tapi)\s+(saya|kami)\s+(akan|dapat|bisa)\s+(bantu|jelaskan|berikan)/iu', $reply)
+            || preg_match('/(namun|tetapi|tapi)\s+berikut\s+(penjelasan|jawaban|rumus|langkah|contoh)/iu', $reply)
+            || preg_match('/(namun|tetapi|tapi)\s+secara\s+(singkat|umum|ilmiah)/iu', $reply)
+            || str_starts_with($reply, 'Maaf, saya adalah Asisten AI Resmi Kemudi');
+
+        if ($isCompromised) {
+            $reply = Prompts::STANDARD_REJECTION;
         }
 
         // 5. Structure response payload

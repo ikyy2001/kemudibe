@@ -167,6 +167,33 @@ class AiRateLimitingFeatureTest extends TestCase
             ->assertStatus(200);
     }
 
+    public function test_different_guest_devices_on_same_ip_do_not_block_each_other(): void
+    {
+        $sameIp = '192.168.1.200';
+        $deviceA = 'device-laptop-1111-2222';
+        $deviceB = 'device-mobile-3333-4444';
+
+        // Device A uses all 5 per-minute attempts on same IP
+        for ($i = 0; $i < 5; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => $sameIp])
+                ->withHeaders(['X-Guest-Device-Id' => $deviceA])
+                ->postJson('/api/ai/public/chat', ['message' => 'Pesan Dev A ' . $i])
+                ->assertStatus(200);
+        }
+
+        // Device A is throttled on 6th request
+        $this->withServerVariables(['REMOTE_ADDR' => $sameIp])
+            ->withHeaders(['X-Guest-Device-Id' => $deviceA])
+            ->postJson('/api/ai/public/chat', ['message' => 'Pesan Dev A blokir'])
+            ->assertStatus(429);
+
+        // Device B on the EXACT SAME IP must NOT be blocked
+        $this->withServerVariables(['REMOTE_ADDR' => $sameIp])
+            ->withHeaders(['X-Guest-Device-Id' => $deviceB])
+            ->postJson('/api/ai/public/chat', ['message' => 'Pesan Dev B sukses'])
+            ->assertStatus(200);
+    }
+
     public function test_double_submit_inflight_lock_returns_409(): void
     {
         $ip = '10.50.60.70';

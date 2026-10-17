@@ -45,7 +45,16 @@ class AppServiceProvider extends ServiceProvider
             $limits = config('ai.limits', []);
             $perMinute = (int) ($limits[$tier]['per_minute'] ?? 5);
 
-            $key = $user ? "ai:user:{$user->id}" : "ai:ip:" . ($request->ip() ?: '127.0.0.1');
+            if ($user) {
+                $key = "ai:user:{$user->id}";
+            } else {
+                $rawIp = (string) ($request->ip() ?: '127.0.0.1');
+                $rawDeviceId = (string) $request->header('X-Guest-Device-Id', '');
+                $sanitizedDeviceId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawDeviceId);
+                $key = (!empty($sanitizedDeviceId) && strlen($sanitizedDeviceId) >= 8 && strlen($sanitizedDeviceId) <= 64)
+                    ? "ai:guest:{$rawIp}:{$sanitizedDeviceId}"
+                    : "ai:ip:{$rawIp}";
+            }
 
             return Limit::perMinute($perMinute)
                 ->by($key)
@@ -63,7 +72,16 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('ai-quota', function (Request $request) {
             $user = $request->user();
-            $key = $user ? "ai_quota:user:{$user->id}" : "ai_quota:ip:" . ($request->ip() ?: '127.0.0.1');
+            if ($user) {
+                $key = "ai_quota:user:{$user->id}";
+            } else {
+                $rawIp = (string) ($request->ip() ?: '127.0.0.1');
+                $rawDeviceId = (string) $request->header('X-Guest-Device-Id', '');
+                $sanitizedDeviceId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawDeviceId);
+                $key = (!empty($sanitizedDeviceId) && strlen($sanitizedDeviceId) >= 8 && strlen($sanitizedDeviceId) <= 64)
+                    ? "ai_quota:guest:{$rawIp}:{$sanitizedDeviceId}"
+                    : "ai_quota:ip:{$rawIp}";
+            }
 
             return Limit::perMinute(60)->by($key);
         });

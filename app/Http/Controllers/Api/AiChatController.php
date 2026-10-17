@@ -30,12 +30,31 @@ class AiChatController extends Controller
     }
 
     /**
+     * Resolve unique identifier for guest users per device.
+     * Uses X-Guest-Device-Id header combined with IP to prevent device collusion on shared NAT/Wi-Fi.
+     */
+    protected function resolveGuestIdentifier(Request $request): string
+    {
+        $rawIp = (string) ($request->ip() ?: '127.0.0.1');
+        $rawDeviceId = (string) $request->header('X-Guest-Device-Id', '');
+        $sanitizedDeviceId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawDeviceId);
+
+        if (!empty($sanitizedDeviceId) && strlen($sanitizedDeviceId) >= 8 && strlen($sanitizedDeviceId) <= 64) {
+            // Isolasi per device. Kombinasi IP + sanitizedDeviceId memastikan 1 device = 1 limit.
+            return sha1("guest:dev:{$rawIp}:{$sanitizedDeviceId}");
+        }
+
+        // Fallback ke IP jika client tidak mengirimkan device ID (backward compatible)
+        return sha1($rawIp);
+    }
+
+    /**
      * Get quota information for public guest users.
      */
     public function publicQuota(Request $request): JsonResponse
     {
         $tier = AiTierResolver::TIER_GUEST;
-        $identifier = sha1($request->ip() ?: '127.0.0.1');
+        $identifier = $this->resolveGuestIdentifier($request);
 
         return response()->json([
             'success' => true,
@@ -80,7 +99,7 @@ class AiChatController extends Controller
         $history = (array) $request->validated('history', []);
         $tier = AiTierResolver::TIER_GUEST;
         $rawIp = (string) ($request->ip() ?: '127.0.0.1');
-        $identifier = sha1($rawIp);
+        $identifier = $this->resolveGuestIdentifier($request);
 
         $lock = Cache::lock("ai:inflight:{$tier}:{$identifier}", 35);
         if (!$lock->get()) {

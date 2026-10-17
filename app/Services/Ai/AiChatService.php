@@ -84,14 +84,9 @@ class AiChatService
 
         $reply = $response->content;
 
-        // Strict Guardrail: Mencegah bypass/jailbreak, kode pemrograman, dan jawaban kompromi di luar domain
+        // Guardrail: Mencegah bypass/jailbreak kode pemrograman dan kompromi jawaban PR di luar domain
         $isCompromised = preg_match('/<form|<input|<script|<select|<\/form>|```(html|javascript|php|python|sql|bash|sh|css)/i', $reply)
-            || preg_match('/(tidak berkaitan|bukan bagian|di luar|bukan ranah|terlepas dari|meskipun)[\s\S]*?(namun|tetapi|tapi|sebagai bantuan|secara umum|secara ilmiah)/iu', $reply)
-            || preg_match('/(sebagai bantuan awal|namun,?\s*sebagai bantuan)/iu', $reply)
-            || preg_match('/(namun|tetapi|tapi)\s+(saya|kami)\s+(akan|dapat|bisa)\s+(bantu|jelaskan|berikan)/iu', $reply)
-            || preg_match('/(namun|tetapi|tapi)\s+berikut\s+(penjelasan|jawaban|rumus|langkah|contoh)/iu', $reply)
-            || preg_match('/(namun|tetapi|tapi)\s+secara\s+(singkat|umum|ilmiah)/iu', $reply)
-            || str_starts_with($reply, 'Maaf, saya adalah Asisten AI Resmi Kemudi');
+            || preg_match('/(tidak berkaitan|bukan bagian|di luar ranah|di luar domain)[\s\S]{1,150}?(berikut\s+(jawaban|rumus|penyelesaian|kunci|solusi)|secara\s+ilmiah)/iu', $reply);
 
         if ($isCompromised) {
             $reply = Prompts::STANDARD_REJECTION;

@@ -106,7 +106,7 @@ class UserController extends Controller
     {
         try {
             $accountRows = [];
-            $defaultPassword = $request->string('default_password', 'password123');
+            $defaultPassword = (string) ($request->input('default_password') ?: 'password123');
 
             // 1. Cek jika 'users' dikirimkan (bisa berupa JSON array atau JSON string dalam form-data)
             if ($request->has('users')) {

@@ -176,6 +176,7 @@ class UserService
         $imported = [];
         $errors = [];
         $seenUsernames = [];
+        $seenEmails = [];
 
         // Preload classrooms for quick ID/Name matching
         $classrooms = \App\Models\ClassRoom::all();

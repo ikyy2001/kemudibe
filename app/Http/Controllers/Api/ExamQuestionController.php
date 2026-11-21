@@ -38,7 +38,7 @@ class ExamQuestionController extends Controller
             }
 
             if ($request->filled('type')) {
-                $filters['type'] = $request->string('type');
+                $filters['type'] = $request->string('type')->toString();
             }
 
             if ($request->filled('subject_id')) {
@@ -60,7 +60,7 @@ class ExamQuestionController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $questions = $this->examQuestionService->searchQuestions(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     ['*'],
                     $perPage
                 );

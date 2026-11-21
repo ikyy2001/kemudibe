@@ -129,37 +129,37 @@ Route::prefix('superadmin')
 */
 Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->group(function () {
 
-    // Common Profile, Usage & Leaderboard
+    // Common Profile & Leaderboard
     Route::get('user/profile', [ProfileController::class, 'getProfile']);
     Route::match(['put', 'post'], 'user/profile', [ProfileController::class, 'updateProfile']);
     Route::get('achievements/leaderboard', [LeaderboardController::class, 'index']);
-    Route::get('usage', function () {
-        $inst = app(\App\Services\InstitutionContext::class)->getInstitution();
-        if (!$inst) {
-            return response()->json(['message' => 'Lembaga tidak ditemukan.'], 404);
-        }
-        return response()->json([
-            'data' => [
-                'id' => $inst->id,
-                'name' => $inst->name,
-                'slug' => $inst->slug,
-                'logo' => $inst->logo,
-                'status' => $inst->status,
-                'starts_at' => $inst->starts_at?->format('Y-m-d'),
-                'expires_at' => $inst->expires_at?->format('Y-m-d'),
-                'max_students' => $inst->max_students,
-                'active_students' => $inst->getActiveStudentsCount(),
-                'max_storage_mb' => $inst->max_storage_mb,
-                'storage_used_bytes' => $inst->storage_used_bytes,
-                'storage_used_mb' => round($inst->storage_used_bytes / (1024 * 1024), 2),
-                'is_read_only' => $inst->isReadOnly(),
-                'is_expired' => $inst->isExpired(),
-            ]
-        ]);
-    });
 
     // PIC (Manager) Only Routes
     Route::middleware('role:pic|manager')->group(function () {
+        Route::get('usage', function () {
+            $inst = app(\App\Services\InstitutionContext::class)->getInstitution();
+            if (!$inst) {
+                return response()->json(['message' => 'Lembaga tidak ditemukan.'], 404);
+            }
+            return response()->json([
+                'data' => [
+                    'id' => $inst->id,
+                    'name' => $inst->name,
+                    'slug' => $inst->slug,
+                    'logo' => $inst->logo,
+                    'status' => $inst->status,
+                    'starts_at' => $inst->starts_at?->format('Y-m-d'),
+                    'expires_at' => $inst->expires_at?->format('Y-m-d'),
+                    'max_students' => $inst->max_students,
+                    'active_students' => $inst->getActiveStudentsCount(),
+                    'max_storage_mb' => $inst->max_storage_mb,
+                    'storage_used_bytes' => $inst->storage_used_bytes,
+                    'storage_used_mb' => round($inst->storage_used_bytes / (1024 * 1024), 2),
+                    'is_read_only' => $inst->isReadOnly(),
+                    'is_expired' => $inst->isExpired(),
+                ]
+            ]);
+        });
         Route::post('topics', [TopicController::class, 'store']);
         Route::put('topics/{id}', [TopicController::class, 'update']);
         Route::patch('topics/{id}', [TopicController::class, 'update']);
@@ -309,6 +309,8 @@ Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->gro
         Route::get('reports/exams', [ReportController::class, 'exams']);
         Route::get('security/overview', [SecurityController::class, 'overview']);
         Route::post('security/settings', [SecurityController::class, 'updateSettings']);
+        Route::post('security/audit', [SecurityController::class, 'runAudit']);
+        Route::get('subject-exams/{id}/export-grades', [SubjectExamController::class, 'exportGrades']);
         Route::get('statistics', [StatisticsController::class, 'index']);
         Route::get('users', [UserController::class, 'index']);
         Route::post('topics', [TopicController::class, 'store']);
@@ -324,15 +326,15 @@ Route::prefix('{institution}')->middleware(['auth:sanctum', 'institution'])->gro
         Route::put('subjects/{id}', [SubjectController::class, 'update']);
         Route::patch('subjects/{id}', [SubjectController::class, 'update']);
         Route::get('exam-attempts', [ExamAttemptController::class, 'index']);
-        Route::get('exam-attempts/{id}', [ExamAttemptController::class, 'show']);
-        Route::post('exam-attempts', [ExamAttemptController::class, 'store']);
-        Route::put('exam-attempts/{id}', [ExamAttemptController::class, 'update']);
-        Route::delete('exam-attempts/{id}', [ExamAttemptController::class, 'destroy']);
         Route::get('exam-attempts/statistics', [ExamAttemptController::class, 'statistics']);
+        Route::get('exam-attempts/{id}', [ExamAttemptController::class, 'show'])->whereNumber('id');
+        Route::post('exam-attempts', [ExamAttemptController::class, 'store']);
+        Route::put('exam-attempts/{id}', [ExamAttemptController::class, 'update'])->whereNumber('id');
+        Route::delete('exam-attempts/{id}', [ExamAttemptController::class, 'destroy'])->whereNumber('id');
         Route::get('students/{studentId}/exams/{examId}/attempt', [ExamAttemptController::class, 'getStudentAttempt']);
         Route::get('question-answers', [QuestionAnswerController::class, 'index']);
-        Route::get('question-answers/{id}', [QuestionAnswerController::class, 'show']);
         Route::get('question-answers/needs-grading', [QuestionAnswerController::class, 'needsGrading']);
+        Route::get('question-answers/{id}', [QuestionAnswerController::class, 'show'])->whereNumber('id');
         Route::get('students/{studentId}/exams/{examId}/answers', [QuestionAnswerController::class, 'getStudentAnswers']);
         Route::get('exam-questions', [ExamQuestionController::class, 'index']);
         Route::get('exam-questions/search', [ExamQuestionController::class, 'search']);

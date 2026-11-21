@@ -148,12 +148,14 @@ class ClassStudentRepository
     public function searchByStudentOrClassRoom(string $query, array $fields = ['*'], int $perPage = 10): LengthAwarePaginator
     {
         return ClassStudent::select($fields)
-            ->whereHas('student', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%")
-                  ->orWhere('email', 'LIKE', "%{$query}%");
-            })
-            ->orWhereHas('classRoom', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%");
+            ->where(function ($outer) use ($query) {
+                $outer->whereHas('student', function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%")
+                      ->orWhere('email', 'LIKE', "%{$query}%");
+                })
+                ->orWhereHas('classRoom', function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%");
+                });
             })
             ->with(['student:id,name,email,photo,gender', 'classRoom:id,name,photo,grade'])
             ->latest()
@@ -170,12 +172,14 @@ class ClassStudentRepository
             ->latest();
 
         if (!empty($query)) {
-            $queryBuilder->whereHas('student', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%")
-                  ->orWhere('email', 'LIKE', "%{$query}%");
-            })
-            ->orWhereHas('classRoom', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%");
+            $queryBuilder->where(function ($outer) use ($query) {
+                $outer->whereHas('student', function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%")
+                      ->orWhere('email', 'LIKE', "%{$query}%");
+                })
+                ->orWhereHas('classRoom', function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%");
+                });
             });
         }
 

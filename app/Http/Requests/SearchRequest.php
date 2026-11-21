@@ -23,7 +23,7 @@ class SearchRequest extends FormRequest
     {
         return [
             'q' => 'nullable|string|max:255',
-            'query' => 'required|string|min:1|max:255',
+            'query' => 'nullable|string|max:255',
             'page' => 'nullable|integer|min:1',
             'limit' => 'nullable|integer|min:1|max:50',
             'per_page' => 'nullable|integer|min:1|max:100'
@@ -59,7 +59,7 @@ class SearchRequest extends FormRequest
      */
     public function getSearchQuery(): string
     {
-        return $this->input('q') ?? $this->input('query') ?? '';
+        return (string) ($this->input('q') ?? $this->input('query') ?? '');
     }
 
     /**
@@ -67,7 +67,7 @@ class SearchRequest extends FormRequest
      */
     public function getPage(): int
     {
-        return $this->input('page', 1);
+        return max(1, (int) ($this->input('page') ?? 1));
     }
 
     /**
@@ -75,6 +75,6 @@ class SearchRequest extends FormRequest
      */
     public function getLimit(int $default = 6): int
     {
-        return $this->input('limit') ?? $this->input('per_page') ?? $default;
+        return max(1, (int) ($this->input('limit') ?? $this->input('per_page') ?? $default));
     }
 }

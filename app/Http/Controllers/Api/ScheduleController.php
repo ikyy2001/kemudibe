@@ -23,7 +23,7 @@ class ScheduleController extends Controller
     {
         try {
             $user = $request->user();
-            $isManager = $user->hasRole('manager');
+            $isManager = $user->hasAnyRole(['pic', 'manager', 'admin']);
             $isTeacher = $user->hasRole('teacher');
             $isStudent = !$isManager && !$isTeacher;
 

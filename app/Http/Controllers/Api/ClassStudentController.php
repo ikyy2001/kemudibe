@@ -38,7 +38,7 @@ class ClassStudentController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $enrollments = $this->classStudentService->searchEnrollments(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     $fields,
                     $perPage
                 );
@@ -224,9 +224,9 @@ class ClassStudentController extends Controller
     {
         try {
 
-            $search = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('limit', 6);
+            $search = (string) ($request->input('q') ?? '');
+            $page = max(1, (int) ($request->input('page') ?? 1));
+            $perPage = max(1, (int) ($request->input('limit') ?? 6));
             $fields = ['id', 'student_id', 'class_room_id', 'has_passed'];
 
             $result = $this->classStudentService->searchWithPagination($search, $fields, $page, $perPage);
@@ -300,7 +300,7 @@ class ClassStudentController extends Controller
                 $studentId,
                 $classRoomId,
                 $request->boolean('has_passed'),
-                $request->string('rapport')
+                $request->filled('rapport') ? $request->string('rapport')->toString() : null
             );
 
             return response()->json([

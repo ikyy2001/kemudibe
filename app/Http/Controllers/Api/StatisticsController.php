@@ -21,7 +21,7 @@ class StatisticsController extends Controller
     public function index(Request $request)
     {
         try {
-            $entities = $request->get('entities', '');
+            $entities = (string) ($request->input('entities') ?? '');
             $entityList = array_filter(array_map('trim', explode(',', $entities)));
             
             $statistics = $this->statisticsService->getStatistics($entityList);

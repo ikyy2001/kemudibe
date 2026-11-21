@@ -39,7 +39,7 @@ class ClassRoomController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $classRooms = $this->classRoomService->searchClassRooms(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     $fields,
                     $perPage
                 );

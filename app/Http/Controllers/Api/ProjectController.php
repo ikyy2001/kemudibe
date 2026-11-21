@@ -18,15 +18,15 @@ class ProjectController extends Controller
             $query = Project::with(['classRoom:id,name', 'leader:id,name,photo']);
 
             if ($request->filled('status')) {
-                $query->where('status', $request->string('status'));
+                $query->where('status', $request->string('status')->toString());
             }
 
             if ($request->filled('category')) {
-                $query->where('category', $request->string('category'));
+                $query->where('category', $request->string('category')->toString());
             }
 
             if ($request->filled('search')) {
-                $search = $request->string('search');
+                $search = $request->string('search')->toString();
                 $query->where(function($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%")

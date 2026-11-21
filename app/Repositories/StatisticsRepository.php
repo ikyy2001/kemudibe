@@ -50,7 +50,7 @@ class StatisticsRepository
     public function getManagersCount(): int
     {
         return User::whereHas('roles', function($query) {
-            $query->where('name', 'manager');
+            $query->whereIn('name', ['pic', 'manager']);
         })->count();
     }
 

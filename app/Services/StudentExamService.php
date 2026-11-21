@@ -134,10 +134,14 @@ class StudentExamService
 
             // Create or update exam attempt
             if ($existingAttempt) {
-                $savedAnswersCount = \App\Models\QuestionAnswer::where('exam_attempt_id', $existingAttempt->id)->count();
-                $savedPointsEarned = \App\Models\QuestionAnswer::where('exam_attempt_id', $existingAttempt->id)->sum('points_earned');
+                $savedAnswersQuery = \App\Models\QuestionAnswer::where('student_id', $studentId)
+                    ->whereHas('examQuestion', function ($q) use ($examId) {
+                        $q->where('subject_exam_id', $examId);
+                    });
+                $savedAnswersCount = (clone $savedAnswersQuery)->count();
+                $savedPointsEarned = (clone $savedAnswersQuery)->sum('points_earned');
 
-                // Student is restarting or resuming the exam
+                // Student is resuming the exam; preserve anti-cheat violation & freeze state
                 $existingAttempt->update([
                     'is_completed' => false,
                     'current_exam_device_token' => $deviceToken,
@@ -150,14 +154,6 @@ class StudentExamService
                     'has_passed' => false,
                     'completed_at' => null,
                     'forced_reason' => null,
-                    'violation_count' => 0,
-                    'violation_score' => 0.0,
-                    'max_violation_score' => 3.0,
-                    'is_frozen' => false,
-                    'frozen_at' => null,
-                    'freeze_count' => 0,
-                    'offline_gaps_count' => 0,
-                    'total_offline_seconds' => 0,
                 ]);
                 $attempt = $existingAttempt->fresh();
             } else {
@@ -532,9 +528,9 @@ class StudentExamService
         $isFrozen = (bool)$attempt->is_frozen;
         $inGrace = !empty($attempt->grace_until) && $now->lt($attempt->grace_until);
 
-        // Detect offline gap (if gap > 35 seconds, missed multiple heartbeats)
+        // Detect offline gap (if gap > 50 seconds, missed multiple heartbeats)
         // Skip penalty if attempt is already frozen or within grace period
-        if ($lastHeartbeat && $now->diffInSeconds($lastHeartbeat) > 35 && !$attempt->is_completed && !$isFrozen && !$inGrace) {
+        if ($lastHeartbeat && $now->diffInSeconds($lastHeartbeat) > 50 && !$attempt->is_completed && !$isFrozen && !$inGrace) {
             $gapSeconds = $now->diffInSeconds($lastHeartbeat);
             $gapWeight = $gapSeconds >= 60 ? 1.0 : 0.5;
 

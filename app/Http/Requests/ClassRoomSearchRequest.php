@@ -51,7 +51,7 @@ class ClassRoomSearchRequest extends FormRequest
      */
     public function getSearchQuery(): string
     {
-        return $this->input('q', '');
+        return (string) ($this->input('q') ?? '');
     }
 
     /**
@@ -59,7 +59,7 @@ class ClassRoomSearchRequest extends FormRequest
      */
     public function getPage(): int
     {
-        return $this->input('page', 1);
+        return max(1, (int) ($this->input('page') ?? 1));
     }
 
     /**
@@ -67,6 +67,6 @@ class ClassRoomSearchRequest extends FormRequest
      */
     public function getLimit(int $default = 6): int
     {
-        return $this->input('limit', $default);
+        return max(1, (int) ($this->input('limit') ?? $default));
     }
 }

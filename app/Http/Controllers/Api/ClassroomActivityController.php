@@ -22,15 +22,15 @@ class ClassroomActivityController extends Controller
                 ->with('creator:id,name,photo');
 
             if ($request->filled('type')) {
-                $query->where('type', $request->string('type'));
+                $query->where('type', $request->string('type')->toString());
             }
 
             if ($request->filled('status')) {
-                $query->where('status', $request->string('status'));
+                $query->where('status', $request->string('status')->toString());
             }
 
             if ($request->filled('search')) {
-                $search = $request->string('search');
+                $search = $request->string('search')->toString();
                 $query->where(function($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
                       ->orWhere('description', 'like', "%{$search}%");

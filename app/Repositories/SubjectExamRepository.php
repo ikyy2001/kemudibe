@@ -232,8 +232,10 @@ class SubjectExamRepository
     public function findByDateRange(string $startDate, string $endDate, array $fields = ['*'], int $perPage = 10): LengthAwarePaginator
     {
         return SubjectExam::select($fields)
-            ->whereBetween('started_at', [$startDate, $endDate])
-            ->orWhereBetween('ended_at', [$startDate, $endDate])
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('started_at', [$startDate, $endDate])
+                  ->orWhereBetween('ended_at', [$startDate, $endDate]);
+            })
             ->with([
                 'subject:id,name,photo,tagline,teacher_id',
                 'subject.teacher:id,name,email,photo'
@@ -249,11 +251,13 @@ class SubjectExamRepository
     public function searchByNameOrSubject(string $query, array $fields = ['*'], int $perPage = 10): LengthAwarePaginator
     {
         return SubjectExam::select($fields)
-            ->where('name', 'LIKE', "%{$query}%")
-            ->orWhere('about', 'LIKE', "%{$query}%")
-            ->orWhereHas('subject', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%")
-                  ->orWhere('tagline', 'LIKE', "%{$query}%");
+            ->where(function ($outer) use ($query) {
+                $outer->where('name', 'LIKE', "%{$query}%")
+                      ->orWhere('about', 'LIKE', "%{$query}%")
+                      ->orWhereHas('subject', function($q) use ($query) {
+                          $q->where('name', 'LIKE', "%{$query}%")
+                            ->orWhere('tagline', 'LIKE', "%{$query}%");
+                      });
             })
             ->with([
                 'subject:id,name,photo,tagline,teacher_id,topic_id',
@@ -279,12 +283,14 @@ class SubjectExamRepository
             ->latest();
 
         if (!empty($query)) {
-            $queryBuilder->where('name', 'LIKE', "%{$query}%")
-                         ->orWhere('about', 'LIKE', "%{$query}%")
-                         ->orWhereHas('subject', function($q) use ($query) {
-                             $q->where('name', 'LIKE', "%{$query}%")
-                               ->orWhere('tagline', 'LIKE', "%{$query}%");
-                         });
+            $queryBuilder->where(function ($outer) use ($query) {
+                $outer->where('name', 'LIKE', "%{$query}%")
+                      ->orWhere('about', 'LIKE', "%{$query}%")
+                      ->orWhereHas('subject', function($q) use ($query) {
+                          $q->where('name', 'LIKE', "%{$query}%")
+                            ->orWhere('tagline', 'LIKE', "%{$query}%");
+                      });
+            });
         }
 
         $total = $queryBuilder->count();

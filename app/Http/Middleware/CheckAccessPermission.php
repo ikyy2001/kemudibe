@@ -22,8 +22,8 @@ class CheckAccessPermission
     {
         $user = $request->user();
         
-        // Manager has full access
-        if ($user->hasRole('manager')) {
+        // Manager / PIC has full access
+        if ($user->hasAnyRole(['pic', 'manager', 'admin'])) {
             return $next($request);
         }
         

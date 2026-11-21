@@ -37,12 +37,12 @@ class ExamAttemptController extends Controller
             }
 
             if ($request->filled('status')) {
-                $filters['status'] = $request->string('status');
+                $filters['status'] = $request->string('status')->toString();
             }
 
             if ($request->filled('start_date') && $request->filled('end_date')) {
-                $filters['start_date'] = $request->string('start_date');
-                $filters['end_date'] = $request->string('end_date');
+                $filters['start_date'] = $request->string('start_date')->toString();
+                $filters['end_date'] = $request->string('end_date')->toString();
             }
 
             $attempts = $this->examAttemptService->getPaginated($filters, $perPage);
@@ -186,8 +186,8 @@ class ExamAttemptController extends Controller
             }
 
             if ($request->filled('start_date') && $request->filled('end_date')) {
-                $filters['start_date'] = $request->string('start_date');
-                $filters['end_date'] = $request->string('end_date');
+                $filters['start_date'] = $request->string('start_date')->toString();
+                $filters['end_date'] = $request->string('end_date')->toString();
             }
 
             $stats = $this->examAttemptService->getStatistics($filters);

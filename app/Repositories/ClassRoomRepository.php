@@ -130,8 +130,10 @@ class ClassRoomRepository
     public function searchByNameAndGrade(string $query, array $fields = ['*'], int $perPage = 10): LengthAwarePaginator
     {
         return ClassRoom::select($fields)
-            ->where('name', 'LIKE', "%{$query}%")
-            ->orWhere('grade', 'LIKE', "%{$query}%")
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('grade', 'LIKE', "%{$query}%");
+            })
             ->withCount(['classStudents', 'classSubjects'])
             ->latest()
             ->paginate($perPage);
@@ -204,8 +206,10 @@ class ClassRoomRepository
             ->latest();
 
         if (!empty($query)) {
-            $queryBuilder->where('name', 'LIKE', "%{$query}%")
-                         ->orWhere('grade', 'LIKE', "%{$query}%");
+            $queryBuilder->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('grade', 'LIKE', "%{$query}%");
+            });
         }
 
         $total = $queryBuilder->count();
@@ -234,8 +238,10 @@ class ClassRoomRepository
             ->limit($limit);
 
         if (!empty($query)) {
-            $queryBuilder->where('name', 'LIKE', "%{$query}%")
-                         ->orWhere('grade', 'LIKE', "%{$query}%");
+            $queryBuilder->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('grade', 'LIKE', "%{$query}%");
+            });
         }
 
         return $queryBuilder->get();

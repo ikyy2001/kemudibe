@@ -58,7 +58,7 @@ class QuestionOptionController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $options = $this->questionOptionService->searchOptions(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     $perPage
                 );
                 return QuestionOptionResource::collection($options);
@@ -359,8 +359,9 @@ class QuestionOptionController extends Controller
         try {
 
             $perPage = $request->integer('per_page', 6);
+            $searchQuery = (string) ($request->input('query') ?? $request->input('q') ?? '');
             $options = $this->questionOptionService->searchOptions(
-                $request->string('query'),
+                $searchQuery,
                 $perPage
             );
 

@@ -28,7 +28,7 @@ class UserController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $users = $this->userService->searchUsers(
-                    $request->string('search'), 
+                    $request->string('search')->toString(), 
                     $fields, 
                     $perPage
                 );
@@ -38,7 +38,7 @@ class UserController extends Controller
             // Filter by gender
             if ($request->filled('gender')) {
                 $users = $this->userService->findUsersByGender(
-                    $request->string('gender'), 
+                    $request->string('gender')->toString(), 
                     $fields, 
                     $perPage
                 );
@@ -48,7 +48,7 @@ class UserController extends Controller
             // Filter by role
             if ($request->filled('role')) {
                 $users = $this->userService->findUsersByRole(
-                    $request->string('role'), 
+                    $request->string('role')->toString(), 
                     $fields, 
                     $perPage
                 );

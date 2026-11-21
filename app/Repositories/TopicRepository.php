@@ -76,8 +76,10 @@ class TopicRepository
     public function searchByNameAndDescription(string $query, array $fields = ['*'], int $perPage = 10): LengthAwarePaginator
     {
         return Topic::select($fields)
-            ->where('name', 'LIKE', "%{$query}%")
-            ->orWhere('about', 'LIKE', "%{$query}%")
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('about', 'LIKE', "%{$query}%");
+            })
             ->latest()
             ->withCount('subjects')
             ->paginate($perPage);
@@ -93,8 +95,10 @@ class TopicRepository
             ->latest();
 
         if (!empty($query)) {
-            $queryBuilder->where('name', 'LIKE', "%{$query}%")
-                         ->orWhere('about', 'LIKE', "%{$query}%");
+            $queryBuilder->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('about', 'LIKE', "%{$query}%");
+            });
         }
 
         $total = $queryBuilder->count();
@@ -123,8 +127,10 @@ class TopicRepository
             ->limit($limit);
 
         if (!empty($query)) {
-            $queryBuilder->where('name', 'LIKE', "%{$query}%")
-                         ->orWhere('about', 'LIKE', "%{$query}%");
+            $queryBuilder->where(function ($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('about', 'LIKE', "%{$query}%");
+            });
         }
 
         return $queryBuilder->get();

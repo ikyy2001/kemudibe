@@ -51,7 +51,7 @@ class SubjectExamController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $exams = $this->subjectExamService->searchExams(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     $fields,
                     $perPage
                 );
@@ -87,7 +87,7 @@ class SubjectExamController extends Controller
 
             // Filter by status
             if ($request->filled('status')) {
-                $status = $request->string('status');
+                $status = $request->string('status')->toString();
                 switch ($status) {
                     case 'active':
                         $exams = $this->subjectExamService->getActiveExams($fields);
@@ -107,8 +107,8 @@ class SubjectExamController extends Controller
             // Filter by date range
             if ($request->filled('start_date') && $request->filled('end_date')) {
                 $exams = $this->subjectExamService->findExamsByDateRange(
-                    $request->string('start_date'),
-                    $request->string('end_date'),
+                    $request->string('start_date')->toString(),
+                    $request->string('end_date')->toString(),
                     $fields,
                     $perPage
                 );
@@ -356,9 +356,9 @@ class SubjectExamController extends Controller
     {
         try {
 
-            $search = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('limit', 6);
+            $search = (string) ($request->input('q') ?? '');
+            $page = max(1, (int) ($request->input('page') ?? 1));
+            $perPage = max(1, (int) ($request->input('limit') ?? 6));
             $fields = ['id', 'subject_id', 'name', 'started_at', 'ended_at'];
 
             $result = $this->subjectExamService->searchWithPagination($search, $fields, $page, $perPage);
@@ -1265,6 +1265,98 @@ class SubjectExamController extends Controller
                 'success' => false,
                 'message' => 'Failed to retrieve exam answers',
                 'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Export all student exam results as a downloadable CSV (Excel-compatible with UTF-8 BOM)
+     */
+    public function exportGrades(Request $request, int $id)
+    {
+        try {
+            $user = $request->user();
+            $exam = $this->subjectExamService->findExam($id, ['*']);
+
+            if ($user->hasRole('teacher') && !$user->hasAnyRole(['pic', 'manager', 'admin'])) {
+                if ($exam->subject?->teacher_id !== $user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You do not have permission to export this exam',
+                    ], 403);
+                }
+            }
+
+            $attempts = \App\Models\ExamAttempt::with(['student:id,name,username,email'])
+                ->where('subject_exam_id', $id)
+                ->orderByDesc('is_completed')
+                ->orderByDesc('score_percentage')
+                ->get();
+
+            $safeSlug = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) $exam->name) ?: 'exam_' . $id;
+            $fileName = "hasil_ujian_{$safeSlug}.csv";
+
+            return response()->streamDownload(function () use ($attempts, $exam) {
+                $handle = fopen('php://output', 'w');
+                // UTF-8 BOM so Microsoft Excel opens Indonesian characters cleanly
+                fwrite($handle, "\xEF\xBB\xBF");
+
+                fputcsv($handle, [
+                    'No',
+                    'Nama Siswa',
+                    'Username / NIS',
+                    'Email',
+                    'Status',
+                    'Soal Dijawab',
+                    'Total Soal',
+                    'Poin Diperoleh',
+                    'Total Poin',
+                    'Nilai (%)',
+                    'Kelulusan',
+                    'Skor Pelanggaran',
+                    'Waktu Selesai',
+                ]);
+
+                $passingGrade = $exam->passing_grade ?? $exam->subject?->passing_grade ?? 75;
+                foreach ($attempts as $index => $attempt) {
+                    $totalPts = $attempt->total_points ?: ($exam->total_points ?: 100);
+                    $pct = $attempt->score_percentage !== null
+                        ? (float) $attempt->score_percentage
+                        : ($totalPts > 0 ? round((($attempt->points_earned ?? 0) / $totalPts) * 100, 2) : 0);
+                    $passed = $attempt->is_completed ? ($attempt->has_passed || $pct >= $passingGrade) : false;
+
+                    fputcsv($handle, [
+                        $index + 1,
+                        $attempt->student?->name ?? 'Unknown',
+                        $attempt->student?->username ?? '-',
+                        $attempt->student?->email ?? '-',
+                        $attempt->is_completed ? 'Selesai' : 'Sedang Berlangsung',
+                        $attempt->answered_questions ?? 0,
+                        $attempt->total_questions ?? 0,
+                        $attempt->points_earned ?? 0,
+                        $totalPts,
+                        number_format($pct, 2, '.', ''),
+                        $attempt->is_completed ? ($passed ? 'Lulus' : 'Tidak Lulus') : '-',
+                        $attempt->violation_score ?? 0,
+                        $attempt->completed_at?->format('Y-m-d H:i:s') ?? '-',
+                    ]);
+                }
+
+                fclose($handle);
+            }, $fileName, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Cache-Control' => 'max-age=0',
+            ]);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Exam not found',
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to export exam grades',
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }

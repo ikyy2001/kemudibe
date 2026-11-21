@@ -33,17 +33,18 @@ class GradeController extends Controller
             }
 
             if ($request->filled('status')) {
-                if ($request->string('status') === 'passed') {
+                $status = $request->string('status')->toString();
+                if ($status === 'passed') {
                     $query->where('has_passed', true);
-                } elseif ($request->string('status') === 'failed') {
+                } elseif ($status === 'failed') {
                     $query->where('has_passed', false)->where('is_completed', true);
-                } elseif ($request->string('status') === 'in_progress') {
+                } elseif ($status === 'in_progress') {
                     $query->where('is_completed', false);
                 }
             }
 
             if ($request->filled('search')) {
-                $search = $request->string('search');
+                $search = $request->string('search')->toString();
                 $query->whereHas('student', function($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
                       ->orWhere('email', 'like', "%{$search}%");

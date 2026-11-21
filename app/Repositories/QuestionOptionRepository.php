@@ -152,9 +152,11 @@ class QuestionOptionRepository
     public function search(string $query, int $perPage = 10): LengthAwarePaginator
     {
         return QuestionOption::with(['examQuestion.subjectExam'])
-            ->where('name', 'LIKE', "%{$query}%")
-            ->orWhereHas('examQuestion', function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%");
+            ->where(function ($outer) use ($query) {
+                $outer->where('name', 'LIKE', "%{$query}%")
+                      ->orWhereHas('examQuestion', function($q) use ($query) {
+                          $q->where('name', 'LIKE', "%{$query}%");
+                      });
             })
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);

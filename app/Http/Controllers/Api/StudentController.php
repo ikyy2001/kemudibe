@@ -33,7 +33,7 @@ class StudentController extends Controller
             // Handle search
             if ($request->filled('search')) {
                 $students = $this->studentService->searchStudents(
-                    $request->string('search'),
+                    $request->string('search')->toString(),
                     $fields,
                     $perPage
                 );
@@ -43,7 +43,7 @@ class StudentController extends Controller
             // Filter by gender
             if ($request->filled('gender')) {
                 $students = $this->studentService->findStudentsByGender(
-                    $request->string('gender'),
+                    $request->string('gender')->toString(),
                     $fields,
                     $perPage
                 );
@@ -210,9 +210,9 @@ class StudentController extends Controller
     {
         try {
 
-            $search = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('limit', 6);
+            $search = (string) ($request->input('q') ?? '');
+            $page = max(1, (int) ($request->input('page') ?? 1));
+            $perPage = max(1, (int) ($request->input('limit') ?? 6));
             $fields = ['id', 'name', 'email', 'photo'];
 
             $result = $this->studentService->searchWithPagination($search, $fields, $page, $perPage);

@@ -325,8 +325,12 @@ class ExamProctorController extends Controller
             }
 
             if ($retakeFromScratch) {
-                // Delete previous answers so student starts completely fresh
-                \App\Models\QuestionAnswer::where('exam_attempt_id', $attempt->id)->delete();
+                // Delete previous answers for this exam and student so student starts completely fresh
+                \App\Models\QuestionAnswer::where('student_id', $studentId)
+                    ->whereHas('examQuestion', function ($q) use ($exam) {
+                        $q->where('subject_exam_id', $exam->id);
+                    })
+                    ->delete();
                 $updateData['answered_questions'] = 0;
                 $updateData['points_earned'] = 0;
                 $updateData['has_passed'] = false;

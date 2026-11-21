@@ -25,6 +25,7 @@ class Institution extends Model
         'max_students',
         'max_storage_mb',
         'storage_used_bytes',
+        'security_settings',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class Institution extends Model
         'max_students' => 'integer',
         'max_storage_mb' => 'integer',
         'storage_used_bytes' => 'integer',
+        'security_settings' => 'array',
     ];
 
     public function getLogoAttribute($value): ?string
